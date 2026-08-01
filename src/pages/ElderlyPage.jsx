@@ -1,46 +1,81 @@
-// ============================
-// Imports
-// ============================
+// ==========================================================
+// ElderlyPage.jsx
+// Trang quản lý danh sách người cao tuổi / bệnh nhân
+// Tích hợp hoàn toàn với Backend Flask API qua patientService
+// ==========================================================
 
-import { useState } from "react";
-import { FaPlus, FaSearch, FaUsers } from "react-icons/fa";
+import { useCallback, useEffect, useState } from "react";
+import { FaExclamationTriangle, FaPlus, FaSearch, FaSpinner, FaUsers } from "react-icons/fa";
 import ElderlyForm from "../components/Elderly/ElderlyForm";
 import ElderlyModal from "../components/Elderly/ElderlyModal";
 import ElderlyTable from "../components/Elderly/ElderlyTable";
+import patientService from "../services/patientService";
 
-// Dữ liệu giả phục vụ giao diện trước khi kết nối Backend.
-const defaultElderlyPeople = [
-  {
-    id: 1,
-    image: "",
-    fullName: "Nguyễn Thị Lan",
-    dateOfBirth: "1948-10-15",
-    gender: "Nữ",
-    address: "Quận 3, TP. Hồ Chí Minh",
-    phone: "0901234567",
-    medicalConditions: "Tăng huyết áp",
-    bloodType: "O+",
-    height: "155",
-    weight: "52",
-    relativeName: "Nguyễn Văn Minh",
-    relativePhone: "0912345678",
-    notes: "Cần nhắc uống thuốc buổi sáng.",
-  },
-];
+/**
+ * Chuẩn hóa dữ liệu bệnh nhân từ Backend sang định dạng giao diện Frontend
+ */
+const normalizePatient = (patient) => {
+  if (!patient) return null;
+  return {
+    ...patient,
+    id: patient.patient_id || patient.id,
+    fullName: patient.full_name || patient.fullName || "",
+    age: patient.age || 0,
+    gender: patient.gender || "Nam",
+    phone: patient.phone || "",
+    address: patient.address || "",
+    medicalConditions: patient.medical_history || patient.medicalConditions || "",
+    relativeName: patient.emergency_contact || patient.relativeName || "",
+    relativePhone: patient.emergency_phone || patient.relativePhone || "",
+    dateOfBirth: patient.dateOfBirth || "",
+    notes: patient.notes || "",
+    image: patient.image || "",
+  };
+};
 
 function ElderlyPage() {
   // ============================
   // State
   // ============================
 
-  const [elderlyPeople, setElderlyPeople] = useState(defaultElderlyPeople);
+  const [elderlyPeople, setElderlyPeople] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [selectedPerson, setSelectedPerson] = useState(null);
   const [modalMode, setModalMode] = useState("add");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   // ============================
-  // Modal Handlers
+  // Tải dữ liệu từ Backend API
+  // ============================
+
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      let data = [];
+      if (searchTerm.trim()) {
+        data = await patientService.search(searchTerm.trim());
+      } else {
+        data = await patientService.getAll();
+      }
+      const normalizedData = (data || []).map(normalizePatient);
+      setElderlyPeople(normalizedData);
+    } catch (err) {
+      console.error("Lỗi khi tải danh sách người cao tuổi:", err);
+      setError(err.message || "Không thể tải danh sách người cao tuổi từ máy chủ.");
+    } finally {
+      setLoading(false);
+    }
+  }, [searchTerm]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  // ============================
+  // Handlers cho Modal
   // ============================
 
   const handleCloseModal = () => {
@@ -67,45 +102,78 @@ function ElderlyPage() {
   };
 
   // ============================
-  // CRUD Functions
+  // CRUD Functions kết nối API Backend
   // ============================
 
-  const handleSave = (personData) => {
-    if (modalMode === "edit") {
-      setElderlyPeople((previousPeople) =>
-        previousPeople.map((person) =>
-          person.id === selectedPerson.id ? { ...personData, id: person.id } : person,
-        ),
-      );
-    } else {
-      setElderlyPeople((previousPeople) => [
-        ...previousPeople,
-        { ...personData, id: Date.now() },
-      ]);
-    }
+  const handleSave = async (personData) => {
+    setLoading(true);
+    try {
+      // Tính toán tuổi từ dateOfBirth nếu có hoặc lấy từ age
+      let calculatedAge = parseInt(personData.age, 10);
+      if (isNaN(calculatedAge) || calculatedAge <= 0) {
+        if (personData.dateOfBirth) {
+          const birthYear = new Date(personData.dateOfBirth).getFullYear();
+          const currentYear = new Date().getFullYear();
+          calculatedAge = currentYear - birthYear;
+        } else {
+          calculatedAge = 65; // Mặc định nếu không nhập
+        }
+      }
 
-    handleCloseModal();
+      // Đóng gói payload khớp chính xác với Model Backend MySQL
+      const payload = {
+        full_name: (personData.fullName || personData.full_name || "").trim(),
+        age: calculatedAge,
+        gender: personData.gender || "Nam",
+        phone: personData.phone || "",
+        address: personData.address || "",
+        emergency_contact: personData.relativeName || personData.emergency_contact || "",
+        emergency_phone: personData.relativePhone || personData.emergency_phone || "",
+        medical_history: personData.medicalConditions || personData.medical_history || "",
+      };
+
+      if (modalMode === "edit" && selectedPerson) {
+        const targetId = selectedPerson.patient_id || selectedPerson.id;
+        await patientService.update(targetId, payload);
+        alert("Cập nhật hồ sơ người cao tuổi thành công!");
+      } else {
+        await patientService.create(payload);
+        alert("Thêm mới hồ sơ người cao tuổi thành công!");
+      }
+
+      handleCloseModal();
+      await loadData();
+    } catch (err) {
+      console.error("Lỗi khi lưu thông tin người cao tuổi:", err);
+      alert(err.message || "Không thể lưu thông tin. Vui lòng kiểm tra lại dữ liệu.");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleDelete = (id) => {
-    const personToDelete = elderlyPeople.find((person) => person.id === id);
+  const handleDelete = async (id) => {
+    const personToDelete = elderlyPeople.find((person) => (person.patient_id || person.id) === id);
+    const personName = personToDelete?.fullName || personToDelete?.full_name || "người này";
 
-    if (!personToDelete) return;
+    const confirmDelete = window.confirm(`Bạn có chắc chắn muốn xóa hồ sơ của ${personName}?`);
+    if (!confirmDelete) return;
 
-    const confirmDelete = window.confirm(`Bạn có chắc chắn muốn xóa hồ sơ của ${personToDelete.fullName}?`);
-
-    if (confirmDelete) {
-      setElderlyPeople((previousPeople) => previousPeople.filter((person) => person.id !== id));
+    setLoading(true);
+    try {
+      await patientService.delete(id);
+      alert(`Đã xóa thành công hồ sơ của ${personName}!`);
+      await loadData();
+    } catch (err) {
+      console.error("Lỗi khi xóa hồ sơ:", err);
+      alert(err.message || "Không thể xóa hồ sơ người cao tuổi.");
+    } finally {
+      setLoading(false);
     }
   };
 
   // ============================
-  // Display Data
+  // Metadata & Display
   // ============================
-
-  const displayedPeople = elderlyPeople.filter((person) =>
-    person.fullName.toLowerCase().includes(searchTerm.trim().toLowerCase()),
-  );
 
   const modalTitle = {
     add: "Thêm người cao tuổi",
@@ -114,7 +182,7 @@ function ElderlyPage() {
   }[modalMode];
 
   // ============================
-  // Render
+  // Render Interface
   // ============================
 
   return (
@@ -129,7 +197,7 @@ function ElderlyPage() {
           <p className="text-muted mb-0">Theo dõi và quản lý thông tin sức khỏe cơ bản của người cao tuổi.</p>
         </div>
 
-        <button type="button" className="btn btn-primary" onClick={handleAdd}>
+        <button type="button" className="btn btn-primary" onClick={handleAdd} disabled={loading}>
           <FaPlus className="me-2" />Thêm người cao tuổi
         </button>
       </div>
@@ -149,8 +217,22 @@ function ElderlyPage() {
         </div>
       </div>
 
+      {error && (
+        <div className="alert alert-danger d-flex align-items-center gap-2 rounded-3 mb-4">
+          <FaExclamationTriangle className="fs-5 flex-shrink-0" />
+          <div>{error}</div>
+        </div>
+      )}
+
+      {loading && (
+        <div className="text-center py-4 text-primary">
+          <FaSpinner className="spinner-border spinner-border-sm me-2" role="status" />
+          <span>Đang xử lý dữ liệu từ Backend...</span>
+        </div>
+      )}
+
       <ElderlyTable
-        elderlyPeople={displayedPeople}
+        elderlyPeople={elderlyPeople}
         onView={handleView}
         onEdit={handleEdit}
         onDelete={handleDelete}
@@ -158,7 +240,7 @@ function ElderlyPage() {
 
       <ElderlyModal show={showModal} onHide={handleCloseModal} title={modalTitle}>
         <ElderlyForm
-          key={selectedPerson?.id || modalMode}
+          key={selectedPerson?.id || selectedPerson?.patient_id || modalMode}
           initialData={selectedPerson}
           onSubmit={handleSave}
           onCancel={handleCloseModal}

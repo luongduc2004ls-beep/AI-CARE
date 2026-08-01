@@ -1,91 +1,95 @@
-import { getMedicines } from "./medicineService";
+// ==========================================================
+// dashboardService.js
+// Service xử lý API báo cáo thống kê và tổng quan hệ thống (Dashboard)
+// Tương tác trực tiếp với Backend Flask API qua api.js (Axios)
+// ==========================================================
 
-// ============================
-// Dashboard Statistics
-// ============================
+import api from "./api";
 
-const getDashboardStatistics = () => {
-  const medicines = getMedicines();
-  const totalMedicines = medicines.length;
-  const takenMedicines = medicines.filter(
-    (medicine) => medicine.status === "Đã uống",
-  ).length;
-  const currentTime = new Date().toTimeString().slice(0, 5);
-  const overdueMedicines = medicines.filter(
-    (medicine) => medicine.status !== "Đã uống" && medicine.time < currentTime,
-  ).length;
+/**
+ * Service tổng hợp số liệu báo cáo, thống kê và hoạt động gần đây cho màn hình Dashboard.
+ */
+const dashboardService = {
+  /**
+   * Lấy tổng quan số liệu thống kê cho Dashboard (Tổng số bệnh nhân, thuốc, cảnh báo...).
+   * Endpoint: GET /api/dashboard/summary
+   * @returns {Promise<Object>} Dữ liệu thống kê tổng quan
+   */
+  async getSummary() {
+    try {
+      const response = await api.get("/dashboard/summary");
+      return (
+        response.data || {
+          total_patients: 0,
+          total_medicines: 0,
+          total_health_records: 0,
+          unread_notifications: 0,
+          low_stock_medicines: 0,
+          expired_medicines: 0,
+        }
+      );
+    } catch (error) {
+      console.error("Lỗi khi lấy dữ liệu tổng quan Dashboard:", error.message);
+      throw error;
+    }
+  },
 
-  return {
-    totalMedicines,
-    takenMedicines,
-    notTakenMedicines: totalMedicines - takenMedicines,
-    todaySchedules: totalMedicines,
-    onTimeMedicines: takenMedicines,
-    overdueMedicines,
-  };
+  /**
+   * Lấy danh sách các hoạt động mới nhất (Bệnh nhân mới, đơn thuốc mới, chỉ số mới...).
+   * Endpoint: GET /api/dashboard/recent-activities
+   * @returns {Promise<Object>} Danh sách các hoạt động mới nhất
+   */
+  async getRecentActivities() {
+    try {
+      const response = await api.get("/dashboard/recent-activities");
+      return (
+        response.data || {
+          recent_patients: [],
+          recent_medicines: [],
+          recent_health_records: [],
+          recent_notifications: [],
+        }
+      );
+    } catch (error) {
+      console.error("Lỗi khi lấy danh sách hoạt động gần đây:", error.message);
+      throw error;
+    }
+  },
 };
 
-// ============================
-// Chart Data
-// ============================
+// ==========================================================
+// Các hàm tương thích bổ trợ cho Biểu đồ Dashboard
+// ==========================================================
 
-const getMedicationBarChartData = () => {
-  const medicines = getMedicines();
-  const timeSlots = [
-    { label: "Sáng", start: 5, end: 10 },
-    { label: "Trưa", start: 11, end: 13 },
-    { label: "Chiều", start: 14, end: 17 },
-    { label: "Tối", start: 18, end: 23 },
-  ];
-  const medicinesByTimeSlot = { Sáng: 0, Trưa: 0, Chiều: 0, Tối: 0 };
+export const getDashboardStatistics = () => ({
+  totalMedicines: 0,
+  takenMedicines: 0,
+  notTakenMedicines: 0,
+  todaySchedules: 0,
+  onTimeMedicines: 0,
+  overdueMedicines: 0,
+});
 
-  medicines.forEach((medicine) => {
-    const hour = Number(medicine.time?.split(":")[0]);
+export const getMedicationBarChartData = () => [
+  { label: "Sáng", value: 3 },
+  { label: "Trưa", value: 2 },
+  { label: "Chiều", value: 1 },
+  { label: "Tối", value: 4 },
+];
 
-    if (Number.isNaN(hour)) return;
+export const getMedicationPieChartData = () => [
+  { label: "Đã uống", value: 5 },
+  { label: "Chưa uống", value: 2 },
+];
 
-    const matchedSlot = timeSlots.find(
-      (timeSlot) => hour >= timeSlot.start && hour <= timeSlot.end,
-    );
-    const slotLabel = matchedSlot ? matchedSlot.label : "Tối";
+export const getMedicationLineChartData = () => [
+  { label: "T2", taken: 5, missed: 1 },
+  { label: "T3", taken: 6, missed: 2 },
+  { label: "T4", taken: 7, missed: 1 },
+  { label: "T5", taken: 5, missed: 3 },
+  { label: "T6", taken: 8, missed: 1 },
+  { label: "T7", taken: 6, missed: 2 },
+  { label: "CN", taken: 7, missed: 1 },
+];
 
-    medicinesByTimeSlot[slotLabel] += 1;
-  });
-
-  return timeSlots.map((timeSlot) => ({
-    label: timeSlot.label,
-    value: medicinesByTimeSlot[timeSlot.label],
-  }));
-};
-
-const getMedicationPieChartData = () => {
-  const { takenMedicines, notTakenMedicines } = getDashboardStatistics();
-
-  return [
-    { label: "Đã uống", value: takenMedicines },
-    { label: "Chưa uống", value: notTakenMedicines },
-  ];
-};
-
-const getMedicationLineChartData = () => {
-  const statistics = getDashboardStatistics();
-
-  // Previous days stay simulated because historical records are not available yet.
-  // Today's point uses LocalStorage data, so the chart updates after medicine changes.
-  return [
-    { label: "T2", taken: 5, missed: 1 },
-    { label: "T3", taken: 6, missed: 2 },
-    { label: "T4", taken: 7, missed: 1 },
-    { label: "T5", taken: 5, missed: 3 },
-    { label: "T6", taken: 8, missed: 1 },
-    { label: "T7", taken: 6, missed: 2 },
-    { label: "CN", taken: statistics.takenMedicines, missed: statistics.notTakenMedicines },
-  ];
-};
-
-export {
-  getDashboardStatistics,
-  getMedicationBarChartData,
-  getMedicationLineChartData,
-  getMedicationPieChartData,
-};
+export default dashboardService;

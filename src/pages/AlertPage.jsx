@@ -1,82 +1,109 @@
-// ============================
-// Imports
-// ============================
+// ==========================================================
+// AlertPage.jsx
+// Trang Trung tâm thông báo và Cảnh báo sức khỏe
+// Tích hợp trực tiếp Backend Flask API qua notificationService
+// ==========================================================
 
-import { useState } from "react";
-import { FaBell } from "react-icons/fa";
+import { useCallback, useEffect, useState } from "react";
+import { FaBell, FaExclamationTriangle, FaSpinner } from "react-icons/fa";
 import NotificationFilter from "../components/Notification/NotificationFilter";
 import NotificationList from "../components/Notification/NotificationList";
+import notificationService from "../services/notificationService";
 
-// Dữ liệu tạm thời phục vụ giao diện trước khi kết nối Backend.
-const defaultAlerts = [
-  {
-    id: 1,
-    type: "medicine",
-    title: "Đến giờ uống thuốc",
-    content: "Bà Nguyễn Thị Lan cần uống Paracetamol lúc 08:00.",
-    time: "Hôm nay, 08:00",
-    isRead: false,
-  },
-  {
-    id: 2,
-    type: "health",
-    title: "Nhịp tim bất thường",
-    content: "Nhịp tim đo được là 105 bpm, cao hơn ngưỡng theo dõi.",
-    time: "Hôm nay, 07:45",
-    isRead: false,
-  },
-  {
-    id: 3,
-    type: "warning",
-    title: "Thuốc sắp hết",
-    content: "Vitamin C chỉ còn đủ dùng trong 2 ngày tới.",
-    time: "Hôm qua, 18:30",
-    isRead: true,
-  },
-  {
-    id: 4,
-    type: "fall",
-    title: "Phát hiện té ngã",
-    content: "Thiết bị cảm biến ghi nhận tín hiệu té ngã cần được kiểm tra.",
-    time: "Hôm qua, 15:20",
-    isRead: true,
-  },
-];
+/**
+ * Chuẩn hóa đối tượng thông báo từ Backend API Flask
+ */
+const normalizeNotification = (item) => {
+  if (!item) return null;
+  return {
+    ...item,
+    id: item.notification_id || item.id,
+    notification_id: item.notification_id || item.id,
+    title: item.title || "Thông báo",
+    content: item.message || item.content || "",
+    type: item.type || "warning",
+    isRead: Boolean(item.is_read !== undefined ? item.is_read : item.isRead),
+    time: item.created_at || item.time || "Gần đây",
+  };
+};
 
 function AlertPage() {
   // ============================
   // State
   // ============================
 
-  const [alerts, setAlerts] = useState(defaultAlerts);
+  const [alerts, setAlerts] = useState([]);
   const [selectedType, setSelectedType] = useState("all");
   const [selectedStatus, setSelectedStatus] = useState("all");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   // ============================
-  // Event Handlers
+  // Tải danh sách thông báo từ API Backend
   // ============================
 
-  const handleMarkAsRead = (id) => {
-    setAlerts((previousAlerts) =>
-      previousAlerts.map((alert) =>
-        alert.id === id ? { ...alert, isRead: true } : alert,
-      ),
-    );
+  const loadNotifications = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await notificationService.getAll();
+      const normalizedData = (data || []).map(normalizeNotification);
+      setAlerts(normalizedData);
+    } catch (err) {
+      console.error("Lỗi khi tải thông báo từ máy chủ:", err);
+      setError(err.message || "Không thể nạp danh sách cảnh báo từ cơ sở dữ liệu.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadNotifications();
+  }, [loadNotifications]);
+
+  // ============================
+  // Handlers cho các thao tác
+  // ============================
+
+  const handleMarkAsRead = async (id) => {
+    try {
+      await notificationService.markAsRead(id);
+      setAlerts((previousAlerts) =>
+        previousAlerts.map((alert) =>
+          (alert.notification_id || alert.id) === id ? { ...alert, isRead: true, is_read: true } : alert,
+        ),
+      );
+    } catch (err) {
+      console.error("Lỗi khi đánh dấu thông báo đã đọc:", err);
+      alert(err.message || "Không thể cập nhật trạng thái thông báo.");
+    }
   };
 
-  const handleDelete = (id) => {
-    setAlerts((previousAlerts) => previousAlerts.filter((alert) => alert.id !== id));
+  const handleDelete = async (id) => {
+    const confirmDelete = window.confirm("Bạn có chắc chắn muốn xóa thông báo này?");
+    if (!confirmDelete) return;
+
+    try {
+      await notificationService.delete(id);
+      setAlerts((previousAlerts) =>
+        previousAlerts.filter((alert) => (alert.notification_id || alert.id) !== id),
+      );
+    } catch (err) {
+      console.error("Lỗi khi xóa thông báo:", err);
+      alert(err.message || "Không thể xóa thông báo.");
+    }
   };
 
   // ============================
-  // Display Data
+  // Lọc dữ liệu hiển thị
   // ============================
 
   const filteredAlerts = alerts.filter((alert) => {
     const matchesType = selectedType === "all" || alert.type === selectedType;
-    const matchesStatus = selectedStatus === "all"
-      || (selectedStatus === "read" && alert.isRead)
-      || (selectedStatus === "unread" && !alert.isRead);
+    const matchesStatus =
+      selectedStatus === "all" ||
+      (selectedStatus === "read" && alert.isRead) ||
+      (selectedStatus === "unread" && !alert.isRead);
 
     return matchesType && matchesStatus;
   });
@@ -84,7 +111,7 @@ function AlertPage() {
   const unreadCount = alerts.filter((alert) => !alert.isRead).length;
 
   // ============================
-  // Render
+  // Render Interface
   // ============================
 
   return (
@@ -103,6 +130,20 @@ function AlertPage() {
 
         <span className="badge text-bg-warning px-3 py-2">{unreadCount} cảnh báo chưa đọc</span>
       </div>
+
+      {error && (
+        <div className="alert alert-danger d-flex align-items-center gap-2 rounded-3 mb-4">
+          <FaExclamationTriangle className="fs-5 flex-shrink-0" />
+          <div>{error}</div>
+        </div>
+      )}
+
+      {loading && (
+        <div className="text-center py-4 text-warning">
+          <FaSpinner className="spinner-border spinner-border-sm me-2" role="status" />
+          <span>Đang nạp thông báo từ máy chủ...</span>
+        </div>
+      )}
 
       <div className="mb-4">
         <NotificationFilter

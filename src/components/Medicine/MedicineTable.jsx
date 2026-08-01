@@ -1,26 +1,76 @@
-import { useState } from "react";
+// ==========================================================
+// MedicineTable.jsx
+// Quản lý và hiển thị danh sách thuốc từ Backend API Flask
+// Tương tác trực tiếp với MySQL qua medicineService
+// ==========================================================
+
+import { useCallback, useEffect, useState } from "react";
 import { Button, Table } from "react-bootstrap";
-import { FaCheck, FaEdit, FaPlus, FaSortAlphaDown, FaTrash } from "react-icons/fa";
-import {
-  addMedicine as addMedicineToStorage,
-  deleteMedicine as deleteMedicineFromStorage,
-  updateMedicine as updateMedicineInStorage,
-  updateMedicineStatus,
-} from "../../services/medicineService";
+import { FaCheck, FaEdit, FaExclamationTriangle, FaPlus, FaSortAlphaDown, FaSpinner, FaTrash } from "react-icons/fa";
+import medicineService from "../../services/medicineService";
 import MedicineModal from "./MedicineModal";
 
-function MedicineTable({ medicines, setMedicines, addActivity }) {
+/**
+ * Chuẩn hóa đối tượng thuốc từ Backend API sang định dạng hiển thị Frontend
+ */
+const normalizeMedicine = (med) => {
+  if (!med) return null;
+  return {
+    ...med,
+    id: med.medicine_id || med.id,
+    medicine_id: med.medicine_id || med.id,
+    name: med.medicine_name || med.name || "",
+    dosage: med.dosage || "",
+    time: med.frequency || med.time || "08:00",
+    status: med.status || "Chưa uống",
+    quantity: med.quantity !== undefined ? med.quantity : 10,
+    expire_date: med.expire_date || "",
+  };
+};
+
+function MedicineTable({ addActivity }) {
   // ============================
   // State
   // ============================
 
+  const [medicines, setMedicines] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [selectedMedicine, setSelectedMedicine] = useState(null);
   const [search, setSearch] = useState("");
   const [sortAZ, setSortAZ] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   // ============================
-  // Modal Handlers
+  // Tải danh sách thuốc từ Backend API
+  // ============================
+
+  const loadMedicines = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      let data = [];
+      if (search.trim()) {
+        data = await medicineService.search(search.trim());
+      } else {
+        data = await medicineService.getAll();
+      }
+      const normalized = (data || []).map(normalizeMedicine);
+      setMedicines(normalized);
+    } catch (err) {
+      console.error("Lỗi khi tải danh sách thuốc:", err);
+      setError(err.message || "Không thể tải danh sách thuốc từ cơ sở dữ liệu.");
+    } finally {
+      setLoading(false);
+    }
+  }, [search]);
+
+  useEffect(() => {
+    loadMedicines();
+  }, [loadMedicines]);
+
+  // ============================
+  // Xử lý Modal
   // ============================
 
   const handleOpen = () => {
@@ -39,81 +89,125 @@ function MedicineTable({ medicines, setMedicines, addActivity }) {
   };
 
   // ============================
-  // CRUD Functions
+  // Thao tác CRUD kết nối Flask API & MySQL
   // ============================
 
-  const addMedicine = (medicine) => {
-    // Service saves the medicine first, then returns the latest list for React state.
-    const updatedMedicines = addMedicineToStorage(medicine);
+  const addMedicine = async (medicineData) => {
+    setLoading(true);
+    try {
+      const payload = {
+        medicine_name: (medicineData.name || medicineData.medicine_name || "").trim(),
+        dosage: medicineData.dosage || "1 viên",
+        frequency: medicineData.time || medicineData.frequency || "08:00",
+        quantity: medicineData.quantity ? parseInt(medicineData.quantity, 10) : 10,
+        expire_date: medicineData.expire_date || "2026-12-31",
+        note: medicineData.note || "",
+      };
 
-    setMedicines(updatedMedicines);
-    addActivity("add", medicine.name);
+      await medicineService.create(payload);
+      alert("Thêm mới thuốc thành công!");
+      if (addActivity) addActivity("add", payload.medicine_name);
+      handleClose();
+      await loadMedicines();
+    } catch (err) {
+      console.error("Lỗi khi thêm thuốc:", err);
+      alert(err.message || "Không thể thêm thuốc mới.");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const updateMedicine = (updatedMedicine) => {
-    const updatedMedicines = updateMedicineInStorage(updatedMedicine);
+  const updateMedicine = async (updatedMedicineData) => {
+    setLoading(true);
+    try {
+      const targetId = updatedMedicineData.medicine_id || updatedMedicineData.id;
+      const payload = {
+        medicine_name: (updatedMedicineData.name || updatedMedicineData.medicine_name || "").trim(),
+        dosage: updatedMedicineData.dosage || "1 viên",
+        frequency: updatedMedicineData.time || updatedMedicineData.frequency || "08:00",
+        quantity: updatedMedicineData.quantity ? parseInt(updatedMedicineData.quantity, 10) : 10,
+        expire_date: updatedMedicineData.expire_date || "2026-12-31",
+        note: updatedMedicineData.note || "",
+      };
 
-    setMedicines(updatedMedicines);
-    addActivity("edit", updatedMedicine.name);
-    handleClose();
+      await medicineService.update(targetId, payload);
+      alert("Cập nhật thông tin thuốc thành công!");
+      if (addActivity) addActivity("edit", payload.medicine_name);
+      handleClose();
+      await loadMedicines();
+    } catch (err) {
+      console.error("Lỗi khi cập nhật thuốc:", err);
+      alert(err.message || "Không thể cập nhật thông tin thuốc.");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const deleteMedicine = (id) => {
-    const medicineToDelete = medicines.find((medicine) => medicine.id === id);
-    const confirmDelete = window.confirm("Bạn có chắc chắn muốn xóa thuốc này?");
+  const deleteMedicine = async (id) => {
+    const medicineToDelete = medicines.find((med) => (med.medicine_id || med.id) === id);
+    const medicineName = medicineToDelete?.name || "loại thuốc này";
 
-    if (confirmDelete && medicineToDelete) {
-      const updatedMedicines = deleteMedicineFromStorage(id);
+    const confirmDelete = window.confirm(`Bạn có chắc chắn muốn xóa thuốc ${medicineName}?`);
+    if (!confirmDelete) return;
 
-      setMedicines(updatedMedicines);
-      addActivity("delete", medicineToDelete.name);
+    setLoading(true);
+    try {
+      await medicineService.delete(id);
+      alert(`Đã xóa thuốc ${medicineName} thành công!`);
+      if (addActivity) addActivity("delete", medicineName);
+      await loadMedicines();
+    } catch (err) {
+      console.error("Lỗi khi xóa thuốc:", err);
+      alert(err.message || "Không thể xóa thuốc.");
+    } finally {
+      setLoading(false);
     }
   };
 
   const markAsTaken = (id) => {
-    const medicineToMark = medicines.find((medicine) => medicine.id === id);
-
+    const medicineToMark = medicines.find((med) => (med.medicine_id || med.id) === id);
     if (!medicineToMark || medicineToMark.status === "Đã uống") return;
 
-    const updatedMedicines = updateMedicineStatus(id, "Đã uống");
-
-    setMedicines(updatedMedicines);
-    addActivity("taken", medicineToMark.name);
+    setMedicines((prev) =>
+      prev.map((med) => ((med.medicine_id || med.id) === id ? { ...med, status: "Đã uống" } : med))
+    );
+    if (addActivity) addActivity("taken", medicineToMark.name);
   };
 
   // ============================
-  // Display Data
+  // Sắp xếp danh sách
   // ============================
 
-  // Filter and sort a derived list without changing the original React state.
-  const displayedMedicines = medicines
-    .filter((medicine) => medicine.name.toLowerCase().includes(search.toLowerCase()))
-    .sort((firstMedicine, secondMedicine) =>
-      sortAZ
-        ? firstMedicine.name.localeCompare(secondMedicine.name)
-        : secondMedicine.name.localeCompare(firstMedicine.name),
-    );
+  const displayedMedicines = [...medicines].sort((first, second) =>
+    sortAZ
+      ? first.name.localeCompare(second.name)
+      : second.name.localeCompare(first.name)
+  );
 
   // ============================
-  // Render
+  // Render Interface
   // ============================
 
   return (
     <section className="container-fluid px-3 px-md-4 pb-4 mt-4">
-      <div className="medicine-management-card card">
+      <div className="medicine-management-card card border-0 shadow-sm rounded-4">
         <div className="card-body p-3 p-md-4">
           <div className="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-4">
             <div>
               <h3 className="h4 fw-bold mb-1">Quản lý thuốc</h3>
-              <p className="text-muted mb-0">Tổng số thuốc đang quản lý: <b>{medicines.length}</b></p>
+              <p className="text-muted mb-0">
+                Tổng số thuốc đang quản lý: <b>{medicines.length}</b>
+              </p>
             </div>
 
             <div className="d-flex gap-2 flex-wrap">
               <Button variant="outline-secondary" onClick={() => setSortAZ(!sortAZ)}>
-                <FaSortAlphaDown className="me-2" />{sortAZ ? "A → Z" : "Z → A"}
+                <FaSortAlphaDown className="me-2" />
+                {sortAZ ? "A → Z" : "Z → A"}
               </Button>
-              <Button variant="primary" onClick={handleOpen}>
-                <FaPlus className="me-2" />Thêm thuốc
+              <Button variant="primary" onClick={handleOpen} disabled={loading}>
+                <FaPlus className="me-2" />
+                Thêm thuốc
               </Button>
             </div>
           </div>
@@ -129,6 +223,20 @@ function MedicineTable({ medicines, setMedicines, addActivity }) {
               />
             </div>
           </div>
+
+          {error && (
+            <div className="alert alert-danger d-flex align-items-center gap-2 rounded-3 mb-4">
+              <FaExclamationTriangle className="fs-5 flex-shrink-0" />
+              <div>{error}</div>
+            </div>
+          )}
+
+          {loading && (
+            <div className="text-center py-4 text-primary">
+              <FaSpinner className="spinner-border spinner-border-sm me-2" role="status" />
+              <span>Đang tải dữ liệu từ Backend...</span>
+            </div>
+          )}
 
           <MedicineModal
             show={showModal}
@@ -151,40 +259,66 @@ function MedicineTable({ medicines, setMedicines, addActivity }) {
             <tbody>
               {displayedMedicines.length === 0 ? (
                 <tr>
-                  <td colSpan="5" className="text-center text-muted py-4">Không tìm thấy thuốc phù hợp.</td>
+                  <td colSpan="5" className="text-center text-muted py-4">
+                    Chưa có danh sách thuốc nào trong cơ sở dữ liệu.
+                  </td>
                 </tr>
               ) : (
-                displayedMedicines.map((medicine) => (
-                  <tr key={medicine.id}>
-                    <td className="fw-semibold">{medicine.name}</td>
-                    <td>{medicine.dosage}</td>
-                    <td><span className="badge text-bg-light border text-dark px-3 py-2">{medicine.time}</span></td>
-                    <td>
-                      <span className={`badge px-3 py-2 ${medicine.status === "Đã uống" ? "text-bg-success" : "text-bg-warning"}`}>
-                        {medicine.status}
-                      </span>
-                    </td>
-                    <td>
-                      <div className="d-flex gap-2 flex-wrap">
-                        <Button variant="outline-warning" size="sm" className="medicine-action-button" onClick={() => editMedicine(medicine)}>
-                          <FaEdit className="me-1" />Sửa
-                        </Button>
-                        <Button variant="outline-danger" size="sm" className="medicine-action-button" onClick={() => deleteMedicine(medicine.id)}>
-                          <FaTrash className="me-1" />Xóa
-                        </Button>
-                        <Button
-                          variant={medicine.status === "Đã uống" ? "success" : "outline-success"}
-                          size="sm"
-                          className="medicine-action-button"
-                          disabled={medicine.status === "Đã uống"}
-                          onClick={() => markAsTaken(medicine.id)}
+                displayedMedicines.map((medicine) => {
+                  const medId = medicine.medicine_id || medicine.id;
+                  return (
+                    <tr key={medId}>
+                      <td className="fw-semibold">{medicine.name}</td>
+                      <td>{medicine.dosage}</td>
+                      <td>
+                        <span className="badge text-bg-light border text-dark px-3 py-2">
+                          {medicine.time}
+                        </span>
+                      </td>
+                      <td>
+                        <span
+                          className={`badge px-3 py-2 ${
+                            medicine.status === "Đã uống" ? "text-bg-success" : "text-bg-warning"
+                          }`}
                         >
-                          <FaCheck className="me-1" />{medicine.status === "Đã uống" ? "Đã uống" : "Đánh dấu đã uống"}
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                          {medicine.status}
+                        </span>
+                      </td>
+                      <td>
+                        <div className="d-flex gap-2 flex-wrap">
+                          <Button
+                            variant="outline-warning"
+                            size="sm"
+                            className="medicine-action-button"
+                            onClick={() => editMedicine(medicine)}
+                          >
+                            <FaEdit className="me-1" />
+                            Sửa
+                          </Button>
+                          <Button
+                            variant="outline-danger"
+                            size="sm"
+                            className="medicine-action-button"
+                            onClick={() => deleteMedicine(medId)}
+                          >
+                            <FaTrash className="me-1" />
+                            Xóa
+                          </Button>
+                          <Button
+                            variant={medicine.status === "Đã uống" ? "success" : "outline-success"}
+                            size="sm"
+                            className="medicine-action-button"
+                            disabled={medicine.status === "Đã uống"}
+                            onClick={() => markAsTaken(medId)}
+                          >
+                            <FaCheck className="me-1" />
+                            {medicine.status === "Đã uống" ? "Đã uống" : "Đánh dấu đã uống"}
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </Table>

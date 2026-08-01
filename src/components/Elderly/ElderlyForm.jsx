@@ -1,14 +1,19 @@
-// ============================
-// Imports
-// ============================
+// ==========================================================
+// ElderlyForm.jsx
+// Form nhập liệu và chỉnh sửa thông tin người cao tuổi / bệnh nhân
+// Tương thích dữ liệu từ Backend API Flask (full_name, age, emergency_contact...)
+// ==========================================================
 
 import { useState } from "react";
 import { Button, Form } from "react-bootstrap";
 
-// Tạo dữ liệu rỗng cho chế độ thêm mới.
+/**
+ * Khởi tạo dữ liệu rỗng cho form ở chế độ thêm mới
+ */
 const createEmptyFormData = () => ({
   image: "",
   fullName: "",
+  age: "",
   dateOfBirth: "",
   gender: "",
   address: "",
@@ -22,13 +27,35 @@ const createEmptyFormData = () => ({
   notes: "",
 });
 
+/**
+ * Ánh xạ dữ liệu ban đầu (từ Backend API hoặc props) vào form
+ */
+const initializeFormData = (data) => {
+  if (!data) return createEmptyFormData();
+  return {
+    image: data.image || "",
+    fullName: data.fullName || data.full_name || "",
+    age: data.age !== undefined && data.age !== null ? String(data.age) : "",
+    dateOfBirth: data.dateOfBirth || "",
+    gender: data.gender || "",
+    address: data.address || "",
+    phone: data.phone || "",
+    medicalConditions: data.medicalConditions || data.medical_history || "",
+    bloodType: data.bloodType || "",
+    height: data.height || "",
+    weight: data.weight || "",
+    relativeName: data.relativeName || data.emergency_contact || "",
+    relativePhone: data.relativePhone || data.emergency_phone || "",
+    notes: data.notes || "",
+  };
+};
+
 function ElderlyForm({ initialData, onSubmit, onCancel, readOnly = false }) {
   // ============================
   // State
   // ============================
 
-  // Modal sẽ gắn key theo hồ sơ nên state được khởi tạo đúng cho thêm hoặc sửa.
-  const [formData, setFormData] = useState(initialData || createEmptyFormData());
+  const [formData, setFormData] = useState(() => initializeFormData(initialData));
   const [validated, setValidated] = useState(false);
 
   // ============================
@@ -37,7 +64,6 @@ function ElderlyForm({ initialData, onSubmit, onCancel, readOnly = false }) {
 
   const handleChange = (event) => {
     const { name, value } = event.target;
-
     setFormData((previousData) => ({ ...previousData, [name]: value }));
   };
 
@@ -47,18 +73,26 @@ function ElderlyForm({ initialData, onSubmit, onCancel, readOnly = false }) {
     if (readOnly) return;
 
     const form = event.currentTarget;
-
     if (!form.checkValidity()) {
       event.stopPropagation();
       setValidated(true);
       return;
     }
 
-    onSubmit({ ...formData, fullName: formData.fullName.trim() });
+    // Đóng gói dữ liệu gửi ra ngoài cho ElderlyPage xử lý gọi Service API
+    onSubmit({
+      ...formData,
+      fullName: formData.fullName.trim(),
+      full_name: formData.fullName.trim(),
+      age: formData.age ? parseInt(formData.age, 10) : undefined,
+      medical_history: formData.medicalConditions,
+      emergency_contact: formData.relativeName,
+      emergency_phone: formData.relativePhone,
+    });
   };
 
   // ============================
-  // Render
+  // Render Form UI
   // ============================
 
   return (
@@ -91,16 +125,17 @@ function ElderlyForm({ initialData, onSubmit, onCancel, readOnly = false }) {
         </Form.Group>
 
         <Form.Group className="col-md-3">
-          <Form.Label className="fw-semibold">Ngày sinh *</Form.Label>
+          <Form.Label className="fw-semibold">Tuổi / Ngày sinh *</Form.Label>
           <Form.Control
             required
-            type="date"
-            name="dateOfBirth"
-            value={formData.dateOfBirth}
+            type="text"
+            name="age"
+            placeholder="Nhập tuổi (ví dụ: 65)"
+            value={formData.age}
             onChange={handleChange}
             disabled={readOnly}
           />
-          <Form.Control.Feedback type="invalid">Vui lòng chọn ngày sinh.</Form.Control.Feedback>
+          <Form.Control.Feedback type="invalid">Vui lòng nhập tuổi.</Form.Control.Feedback>
         </Form.Group>
 
         <Form.Group className="col-md-3">
@@ -126,8 +161,8 @@ function ElderlyForm({ initialData, onSubmit, onCancel, readOnly = false }) {
         </Form.Group>
 
         <Form.Group className="col-md-6">
-          <Form.Label className="fw-semibold">Bệnh nền</Form.Label>
-          <Form.Control type="text" name="medicalConditions" placeholder="Ví dụ: Tiểu đường" value={formData.medicalConditions} onChange={handleChange} disabled={readOnly} />
+          <Form.Label className="fw-semibold">Tiền sử bệnh lý / Bệnh nền</Form.Label>
+          <Form.Control type="text" name="medicalConditions" placeholder="Ví dụ: Tăng huyết áp, tiểu đường" value={formData.medicalConditions} onChange={handleChange} disabled={readOnly} />
         </Form.Group>
 
         <Form.Group className="col-md-2">
@@ -156,18 +191,18 @@ function ElderlyForm({ initialData, onSubmit, onCancel, readOnly = false }) {
         </Form.Group>
 
         <Form.Group className="col-md-6">
-          <Form.Label className="fw-semibold">Người thân</Form.Label>
+          <Form.Label className="fw-semibold">Người thân liên hệ khẩn cấp</Form.Label>
           <Form.Control type="text" name="relativeName" placeholder="Họ tên người thân" value={formData.relativeName} onChange={handleChange} disabled={readOnly} />
         </Form.Group>
 
         <Form.Group className="col-md-6">
-          <Form.Label className="fw-semibold">SĐT người thân</Form.Label>
+          <Form.Label className="fw-semibold">SĐT người thân khẩn cấp</Form.Label>
           <Form.Control type="tel" name="relativePhone" placeholder="Số điện thoại người thân" value={formData.relativePhone} onChange={handleChange} disabled={readOnly} />
         </Form.Group>
 
         <Form.Group className="col-12">
           <Form.Label className="fw-semibold">Ghi chú</Form.Label>
-          <Form.Control as="textarea" rows={3} name="notes" placeholder="Thông tin cần lưu ý" value={formData.notes} onChange={handleChange} disabled={readOnly} />
+          <Form.Control as="textarea" rows={3} name="notes" placeholder="Thông tin cần lưu ý thêm" value={formData.notes} onChange={handleChange} disabled={readOnly} />
         </Form.Group>
       </div>
 
