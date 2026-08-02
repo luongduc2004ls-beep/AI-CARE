@@ -77,3 +77,26 @@ def medicine_line_chart():
         DashboardService.medicine_line_chart()
 
     )
+
+
+def summary():
+
+    return success(
+
+        "Dashboard Summary",
+
+        DashboardService.summary()
+
+    )
+
+
+def recent_activities():
+
+    return success(
+
+        "Recent Activities",
+
+        DashboardService.recent_activities()
+
+    )
+

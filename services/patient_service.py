@@ -5,9 +5,13 @@ from models.user import User
 from models.health_record import HealthRecord
 from models.fall_history import FallHistory
 
+from datetime import datetime
+
 def _user_to_dict(user):
-    health_record = HealthRecord.query.filter_by(user_id=user.user_id).order_by(HealthRecord.recorded_at.desc()).first()
-    recent_falls = FallHistory.query.filter_by(user_id=user.user_id).count()
+    records = getattr(user, "health_records", [])
+    health_record = sorted(records, key=lambda r: r.recorded_at or datetime.min, reverse=True)[0] if records else None
+    falls = getattr(user, "fall_history", [])
+    recent_falls = len(falls)
 
     hr_data = None
     if health_record:
@@ -27,9 +31,12 @@ def _user_to_dict(user):
             "ai_prediction": health_record.ai_prediction,
         }
 
+    disease_name = health_record.disease if health_record else None
+
     return {
         "user_id": user.user_id,
         "id": user.user_id,
+        "patient_id": user.user_id,
         "patient_code": user.patient_code or f"PAT{user.user_id:05d}",
         "device_id": user.device_id,
         "full_name": user.full_name or "Chưa cập nhật",
@@ -43,10 +50,14 @@ def _user_to_dict(user):
         "allergy": user.allergy,
         "caregiver_name": user.caregiver_name,
         "caregiver_phone": user.caregiver_phone,
+        "relativeName": user.caregiver_name or "Chưa có",
+        "relativePhone": user.caregiver_phone or user.emergency_contact or "Chưa có",
+        "medical_history": disease_name or "Không có",
+        "medicalConditions": disease_name or "Không có",
         "emergencyContact": f"{user.caregiver_name or 'Người thân'} - {user.caregiver_phone or user.emergency_contact or 'N/A'}",
         "emergency_contact": user.emergency_contact,
         "doctor_name": user.doctor_name,
-        "address": f"Khu vực quản lý thiết bị {user.device_id or 'Đồng hồ AI'}",
+        "address": user.address or f"Khu vực quản lý thiết bị {user.device_id or 'Đồng hồ AI'}",
         "health_record": hr_data,
         "fall_count": recent_falls,
         "created_at": user.created_at.isoformat() if user.created_at else None,
@@ -56,7 +67,10 @@ def _user_to_dict(user):
 class PatientService:
     @staticmethod
     def get_all(page=1, per_page=20, keyword=None):
-        query = User.query
+        query = User.query.options(
+            selectinload(User.health_records),
+            selectinload(User.fall_history)
+        )
 
         if keyword:
             keyword = f"%{keyword.strip()}%"
@@ -82,6 +96,7 @@ class PatientService:
             "per_page": per_page,
             "total_pages": total_pages
         }
+
 
     @staticmethod
     def get_by_id(id):

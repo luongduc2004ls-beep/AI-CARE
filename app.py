@@ -39,9 +39,10 @@ CORS(
 register_error(app)
 
 # Dang ky Routes
-app.register_blueprint(medicine_bp)
-app.register_blueprint(dashboard_bp)
-app.register_blueprint(patient_bp)
+app.register_blueprint(medicine_bp, url_prefix="/api")
+app.register_blueprint(dashboard_bp, url_prefix="/api")
+app.register_blueprint(patient_bp, url_prefix="/api")
+
 
 
 def get_database_status():

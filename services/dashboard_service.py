@@ -300,3 +300,66 @@ class DashboardService:
             "pie": DashboardService.medicine_pie_chart(),
             "line": DashboardService.medicine_line_chart()
         }
+
+    @staticmethod
+    def summary():
+        total_patients = db.session.query(func.count(User.user_id)).scalar() or 0
+        total_medicines = db.session.query(func.count(Medicine.medicine_id)).scalar() or 0
+        total_health_records = db.session.query(func.count(HealthRecord.record_id)).scalar() or 0
+        unread_notifications = db.session.query(func.count(Notification.notification_id)).filter(Notification.is_read == False).scalar() or 0
+        low_stock_medicines = Medicine.query.filter(Medicine.quantity < 10).count()
+        expired_medicines = Medicine.query.filter(Medicine.expire_date < date.today()).count()
+
+        return {
+            "total_patients": total_patients,
+            "total_medicines": total_medicines,
+            "total_health_records": total_health_records,
+            "unread_notifications": unread_notifications,
+            "low_stock_medicines": low_stock_medicines,
+            "expired_medicines": expired_medicines
+        }
+
+    @staticmethod
+    def recent_activities():
+        recent_patients = User.query.order_by(User.created_at.desc()).limit(5).all()
+        recent_medicines = Medicine.query.order_by(Medicine.medicine_id.desc()).limit(5).all()
+        recent_health_records = HealthRecord.query.order_by(HealthRecord.recorded_at.desc()).limit(5).all()
+        recent_notifications = Notification.query.order_by(Notification.created_at.desc()).limit(5).all()
+
+        return {
+            "recent_patients": [
+                {
+                    "id": p.user_id,
+                    "full_name": p.full_name,
+                    "patient_code": p.patient_code,
+                    "created_at": p.created_at.isoformat() if p.created_at else None
+                } for p in recent_patients
+            ],
+            "recent_medicines": [
+                {
+                    "id": m.medicine_id,
+                    "medicine_name": m.medicine_name,
+                    "quantity": m.quantity,
+                    "dosage": m.dosage
+                } for m in recent_medicines
+            ],
+            "recent_health_records": [
+                {
+                    "id": h.record_id,
+                    "user_id": h.user_id,
+                    "blood_pressure": h.blood_pressure,
+                    "heart_rate": h.heart_rate,
+                    "recorded_at": h.recorded_at.isoformat() if h.recorded_at else None
+                } for h in recent_health_records
+            ],
+            "recent_notifications": [
+                {
+                    "id": n.notification_id,
+                    "title": n.title,
+                    "content": n.content,
+                    "is_read": n.is_read,
+                    "created_at": n.created_at.isoformat() if n.created_at else None
+                } for n in recent_notifications
+            ]
+        }
+

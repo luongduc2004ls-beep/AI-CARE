@@ -65,3 +65,20 @@ dashboard_bp.route(
     methods=["GET"]
 
 )(medicine_line_chart)
+
+dashboard_bp.route(
+
+    "/dashboard/summary",
+
+    methods=["GET"]
+
+)(summary)
+
+dashboard_bp.route(
+
+    "/dashboard/recent-activities",
+
+    methods=["GET"]
+
+)(recent_activities)
+

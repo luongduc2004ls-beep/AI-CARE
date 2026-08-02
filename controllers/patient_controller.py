@@ -44,3 +44,9 @@ def delete_patient(patient_id):
     if not deleted:
         return error("Patient not found", 404)
     return success("Patient deleted")
+
+def count_patients():
+    result = PatientService.get_all(page=1, per_page=1)
+    total = result.get("total", 0)
+    return success("Patient count", {"total_patients": total})
+
