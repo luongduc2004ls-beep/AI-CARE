@@ -19,7 +19,11 @@ const healthService = {
   async getAll() {
     try {
       const response = await api.get("/health-records");
-      return response.data || [];
+      return Array.isArray(response)
+        ? response
+        : Array.isArray(response?.data)
+        ? response.data
+        : response?.data?.items || response?.items || [];
     } catch (error) {
       console.error("Lỗi khi lấy danh sách bản ghi sức khỏe:", error.message);
       throw error;
@@ -51,12 +55,17 @@ const healthService = {
   async getByPatientId(patientId) {
     try {
       const response = await api.get(`/patients/${patientId}/health-records`);
-      return response.data || [];
+      return Array.isArray(response)
+        ? response
+        : Array.isArray(response?.data)
+        ? response.data
+        : response?.data?.items || response?.items || [];
     } catch (error) {
       console.error(`Lỗi khi lấy lịch sử sức khỏe của bệnh nhân ID ${patientId}:`, error.message);
       throw error;
     }
   },
+
 
   /**
    * Lấy bản ghi chỉ số sức khỏe mới nhất của một bệnh nhân.

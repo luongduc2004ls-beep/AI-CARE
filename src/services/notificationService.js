@@ -18,7 +18,11 @@ const notificationService = {
   async getAll() {
     try {
       const response = await api.get("/notifications");
-      return response.data || [];
+      return Array.isArray(response)
+        ? response
+        : Array.isArray(response?.data)
+        ? response.data
+        : response?.data?.items || response?.items || [];
     } catch (error) {
       console.error("Lỗi khi lấy danh sách thông báo:", error.message);
       throw error;
@@ -33,12 +37,17 @@ const notificationService = {
   async getUnread() {
     try {
       const response = await api.get("/notifications/unread");
-      return response.data || [];
+      return Array.isArray(response)
+        ? response
+        : Array.isArray(response?.data)
+        ? response.data
+        : response?.data?.items || response?.items || [];
     } catch (error) {
       console.error("Lỗi khi lấy thông báo chưa đọc:", error.message);
       throw error;
     }
   },
+
 
   /**
    * Lấy số lượng thông báo chưa đọc.

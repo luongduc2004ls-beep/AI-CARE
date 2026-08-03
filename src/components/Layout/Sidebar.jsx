@@ -4,7 +4,7 @@
 
 import { NavLink } from "react-router-dom";
 import "./Sidebar.css";
-import { FaBell, FaCog, FaHeartbeat, FaHome, FaPills, FaUsers } from "react-icons/fa";
+import { FaBell, FaCog, FaHeartbeat, FaHome, FaPills, FaUsers, FaVideo } from "react-icons/fa";
 
 function Sidebar() {
   // ======================================================
@@ -15,12 +15,14 @@ function Sidebar() {
   // Mỗi mục gắn với đường dẫn "to" tương ứng route đã khai báo trong App.jsx.
   const menuItems = [
     { label: "Dashboard", icon: <FaHome />, to: "/dashboard" },
+    { label: "Camera AI Báo Ngã", icon: <FaVideo />, to: "/camera" },
     { label: "Quản lý thuốc", icon: <FaPills />, to: "/medicine" },
     { label: "Theo dõi sức khỏe", icon: <FaHeartbeat />, to: "/health" },
     { label: "Người cao tuổi", icon: <FaUsers />, to: "/elderly" },
     { label: "Cảnh báo", icon: <FaBell />, to: "/notification" },
     { label: "Cài đặt", icon: <FaCog />, to: "/settings" },
   ];
+
 
   // ======================================================
   // Render giao diện

@@ -17,8 +17,12 @@ const medicineService = {
    */
   async getAll() {
     try {
-      const response = await api.get("/medicines");
-      return response.data || [];
+      const response = await api.get("/medicines", { params: { per_page: 100 } });
+      return Array.isArray(response)
+        ? response
+        : Array.isArray(response?.data)
+        ? response.data
+        : response?.data?.items || response?.items || [];
     } catch (error) {
       console.error("Lỗi khi lấy danh sách thuốc:", error.message);
       throw error;
@@ -99,9 +103,13 @@ const medicineService = {
   async search(keyword = "") {
     try {
       const response = await api.get("/medicines/search", {
-        params: { keyword },
+        params: { keyword, per_page: 100 },
       });
-      return response.data || [];
+      return Array.isArray(response)
+        ? response
+        : Array.isArray(response?.data)
+        ? response.data
+        : response?.data?.items || response?.items || [];
     } catch (error) {
       console.error("Lỗi khi tìm kiếm thuốc:", error.message);
       throw error;
@@ -116,7 +124,11 @@ const medicineService = {
   async getLowStock() {
     try {
       const response = await api.get("/medicines/low-stock");
-      return response.data || [];
+      return Array.isArray(response)
+        ? response
+        : Array.isArray(response?.data)
+        ? response.data
+        : response?.data?.items || response?.items || [];
     } catch (error) {
       console.error("Lỗi khi lấy danh sách thuốc sắp hết:", error.message);
       throw error;
@@ -131,7 +143,11 @@ const medicineService = {
   async getExpired() {
     try {
       const response = await api.get("/medicines/expired");
-      return response.data || [];
+      return Array.isArray(response)
+        ? response
+        : Array.isArray(response?.data)
+        ? response.data
+        : response?.data?.items || response?.items || [];
     } catch (error) {
       console.error("Lỗi khi lấy danh sách thuốc hết hạn:", error.message);
       throw error;

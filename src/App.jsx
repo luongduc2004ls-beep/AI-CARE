@@ -13,6 +13,7 @@ import AlertPage from "./pages/AlertPage";
 import ElderlyPage from "./pages/ElderlyPage";
 import HealthPage from "./pages/HealthPage";
 import SettingsPage from "./pages/SettingsPage";
+import CameraPage from "./pages/CameraPage";
 import { addActivity as saveActivity, getActivities } from "./services/activityService";
 import { getMedicines } from "./services/medicineService";
 import NotFound from "./pages/NotFound";
@@ -68,11 +69,13 @@ function App() {
 
             {/* Các Route chính của ứng dụng */}
             <Route path="/dashboard" element={<Dashboard medicines={medicines} activities={activities} />} />
+            <Route path="/camera" element={<CameraPage />} />
             <Route path="/medicine" element={medicinePage} />
             <Route path="/elderly" element={<ElderlyPage />} />
             <Route path="/health" element={<HealthPage />} />
             <Route path="/notification" element={<AlertPage />} />
             <Route path="/settings" element={<SettingsPage />} />
+
 
             {/* Sai URL: tạm thời chuyển về Dashboard.
                 TODO Bước 5: thay bằng <NotFound /> sau khi tạo pages/NotFound.jsx */}

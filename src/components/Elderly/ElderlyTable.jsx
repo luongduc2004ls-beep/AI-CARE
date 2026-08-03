@@ -1,16 +1,21 @@
-// ==========================================================
-// ElderlyTable.jsx
-// Bảng hiển thị danh sách người cao tuổi / bệnh nhân
-// Tích hợp dữ liệu từ Backend API Flask (patient_id, full_name, medical_history...)
-// ==========================================================
+import { Button, Table, Pagination, Form } from "react-bootstrap";
+import { FaChevronLeft, FaChevronRight, FaEdit, FaEye, FaPhoneAlt, FaTrash } from "react-icons/fa";
 
-import { Button, Table } from "react-bootstrap";
-import { FaEdit, FaEye, FaPhoneAlt, FaTrash } from "react-icons/fa";
-
-function ElderlyTable({ elderlyPeople = [], onView, onEdit, onDelete }) {
-  // ============================
-  // Render Interface
-  // ============================
+function ElderlyTable({
+  elderlyPeople = [],
+  totalRecords = 0,
+  page = 1,
+  perPage = 20,
+  totalPages = 1,
+  onPageChange,
+  onPerPageChange,
+  onView,
+  onEdit,
+  onDelete,
+}) {
+  const displayTotal = totalRecords > 0 ? totalRecords.toLocaleString("vi-VN") : elderlyPeople.length;
+  const startItem = totalRecords > 0 ? (page - 1) * perPage + 1 : 1;
+  const endItem = totalRecords > 0 ? Math.min(page * perPage, totalRecords) : elderlyPeople.length;
 
   return (
     <div className="card border-0 shadow-sm rounded-4">
@@ -18,8 +23,28 @@ function ElderlyTable({ elderlyPeople = [], onView, onEdit, onDelete }) {
         <div className="d-flex align-items-center justify-content-between gap-3 p-4 pb-3 flex-wrap">
           <div>
             <h2 className="h5 fw-bold mb-1">Danh sách người cao tuổi</h2>
-            <p className="text-muted small mb-0">Tổng số hồ sơ: {elderlyPeople.length}</p>
+            <p className="text-muted small mb-0">
+              Tổng số hồ sơ: <strong className="text-primary">{displayTotal}</strong> bệnh nhân
+              {totalRecords > 0 && ` (Hiển thị ${startItem} - ${endItem})`}
+            </p>
           </div>
+
+          {onPerPageChange && (
+            <div className="d-flex align-items-center gap-2">
+              <span className="small text-muted">Hiển thị:</span>
+              <Form.Select
+                size="sm"
+                value={perPage}
+                onChange={(e) => onPerPageChange(Number(e.target.value))}
+                style={{ width: "90px" }}
+              >
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </Form.Select>
+            </div>
+          )}
         </div>
 
         <Table responsive hover className="mb-0 align-middle">
@@ -49,6 +74,12 @@ function ElderlyTable({ elderlyPeople = [], onView, onEdit, onDelete }) {
                 const phone = person.phone || "N/A";
                 const medicalHistory = person.medical_history || person.medicalConditions || "Không có";
                 const image = person.image || "";
+                const allergy = person.allergy || "";
+                const hasAllergy = allergy &&
+                  allergy.trim() !== "" &&
+                  allergy.toLowerCase() !== "không" &&
+                  allergy.toLowerCase() !== "không có" &&
+                  allergy.toLowerCase() !== "none";
 
                 return (
                   <tr key={personId}>
@@ -70,7 +101,14 @@ function ElderlyTable({ elderlyPeople = [], onView, onEdit, onDelete }) {
                             {fullName.charAt(0).toUpperCase()}
                           </div>
                         )}
-                        <span className="fw-semibold">{fullName}</span>
+                        <div>
+                          <div className="fw-semibold">{fullName}</div>
+                          {hasAllergy && (
+                            <span className="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1 mt-1 small">
+                              ⚠️ Dị ứng: {allergy}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </td>
                     <td>{ageOrDob}</td>
@@ -79,7 +117,10 @@ function ElderlyTable({ elderlyPeople = [], onView, onEdit, onDelete }) {
                       <FaPhoneAlt className="text-muted me-2" />
                       {phone}
                     </td>
-                    <td>{medicalHistory}</td>
+                    <td>
+                      <div>{medicalHistory}</div>
+                    </td>
+
                     <td className="text-end pe-4">
                       <div className="d-inline-flex gap-2">
                         <Button
@@ -114,9 +155,36 @@ function ElderlyTable({ elderlyPeople = [], onView, onEdit, onDelete }) {
             )}
           </tbody>
         </Table>
+
+        {totalPages > 1 && onPageChange && (
+          <div className="d-flex align-items-center justify-content-between p-3 border-top flex-wrap gap-2">
+            <span className="small text-muted">
+              Trang <strong>{page}</strong> / <strong>{totalPages}</strong> (Tổng {displayTotal} kết quả)
+            </span>
+            <div className="d-flex gap-2">
+              <Button
+                variant="outline-secondary"
+                size="sm"
+                disabled={page <= 1}
+                onClick={() => onPageChange(page - 1)}
+              >
+                <FaChevronLeft className="me-1" /> Trước
+              </Button>
+              <Button
+                variant="outline-secondary"
+                size="sm"
+                disabled={page >= totalPages}
+                onClick={() => onPageChange(page + 1)}
+              >
+                Trang sau <FaChevronRight className="ms-1" />
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
 export default ElderlyTable;
+

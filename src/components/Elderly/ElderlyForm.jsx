@@ -1,11 +1,6 @@
-// ==========================================================
-// ElderlyForm.jsx
-// Form nhập liệu và chỉnh sửa thông tin người cao tuổi / bệnh nhân
-// Tương thích dữ liệu từ Backend API Flask (full_name, age, emergency_contact...)
-// ==========================================================
-
 import { useState } from "react";
 import { Button, Form } from "react-bootstrap";
+import { FaCheckCircle, FaExclamationTriangle, FaShieldAlt } from "react-icons/fa";
 
 /**
  * Khởi tạo dữ liệu rỗng cho form ở chế độ thêm mới
@@ -22,6 +17,7 @@ const createEmptyFormData = () => ({
   bloodType: "",
   height: "",
   weight: "",
+  allergy: "",
   relativeName: "",
   relativePhone: "",
   notes: "",
@@ -41,11 +37,12 @@ const initializeFormData = (data) => {
     address: data.address || "",
     phone: data.phone || "",
     medicalConditions: data.medicalConditions || data.medical_history || "",
-    bloodType: data.bloodType || "",
-    height: data.height || "",
-    weight: data.weight || "",
-    relativeName: data.relativeName || data.emergency_contact || "",
-    relativePhone: data.relativePhone || data.emergency_phone || "",
+    bloodType: data.bloodType || data.blood_group || "",
+    height: data.height || data.height_cm || "",
+    weight: data.weight || data.weight_kg || "",
+    allergy: data.allergy || "Không có",
+    relativeName: data.relativeName || data.caregiver_name || data.emergency_contact || "",
+    relativePhone: data.relativePhone || data.caregiver_phone || data.emergency_phone || "",
     notes: data.notes || "",
   };
 };
@@ -86,10 +83,17 @@ function ElderlyForm({ initialData, onSubmit, onCancel, readOnly = false }) {
       full_name: formData.fullName.trim(),
       age: formData.age ? parseInt(formData.age, 10) : undefined,
       medical_history: formData.medicalConditions,
+      allergy: formData.allergy,
       emergency_contact: formData.relativeName,
       emergency_phone: formData.relativePhone,
     });
   };
+
+  const hasAllergy = formData.allergy &&
+    formData.allergy.trim() !== "" &&
+    formData.allergy.toLowerCase() !== "không" &&
+    formData.allergy.toLowerCase() !== "không có" &&
+    formData.allergy.toLowerCase() !== "none";
 
   // ============================
   // Render Form UI
@@ -160,6 +164,40 @@ function ElderlyForm({ initialData, onSubmit, onCancel, readOnly = false }) {
           <Form.Control.Feedback type="invalid">Vui lòng nhập số điện thoại.</Form.Control.Feedback>
         </Form.Group>
 
+        {/* Khối Cảnh báo / Thông tin Dị ứng */}
+        <Form.Group className="col-12">
+          <div className="card border-0 bg-light rounded-3 p-3">
+            <div className="d-flex align-items-center gap-2 mb-2 text-danger fw-bold">
+              <FaShieldAlt className="fs-5" />
+              <span>Thông tin dị ứng & Chống chỉ định</span>
+            </div>
+            <div className="row g-2 align-items-center">
+              <div className="col-md-8">
+                <Form.Control
+                  type="text"
+                  name="allergy"
+                  placeholder="Nhập thông tin dị ứng (ví dụ: Penicillin, Hải sản, Phấn hoa...)"
+                  value={formData.allergy}
+                  onChange={handleChange}
+                  disabled={readOnly}
+                  className={hasAllergy ? "border-danger text-danger fw-bold" : ""}
+                />
+              </div>
+              <div className="col-md-4">
+                {hasAllergy ? (
+                  <span className="badge bg-danger text-wrap p-2 w-100 d-flex align-items-center justify-content-center gap-1">
+                    <FaExclamationTriangle /> Dị ứng: {formData.allergy}
+                  </span>
+                ) : (
+                  <span className="badge bg-success bg-opacity-10 text-success border border-success text-wrap p-2 w-100 d-flex align-items-center justify-content-center gap-1">
+                    <FaCheckCircle /> Không có dị ứng
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        </Form.Group>
+
         <Form.Group className="col-md-6">
           <Form.Label className="fw-semibold">Tiền sử bệnh lý / Bệnh nền</Form.Label>
           <Form.Control type="text" name="medicalConditions" placeholder="Ví dụ: Tăng huyết áp, tiểu đường" value={formData.medicalConditions} onChange={handleChange} disabled={readOnly} />
@@ -215,3 +253,4 @@ function ElderlyForm({ initialData, onSubmit, onCancel, readOnly = false }) {
 }
 
 export default ElderlyForm;
+

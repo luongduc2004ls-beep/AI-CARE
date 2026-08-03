@@ -15,15 +15,38 @@ const patientService = {
    * Endpoint: GET /api/patients
    * @returns {Promise<Array>} Danh sách bệnh nhân
    */
-  async getAll() {
+  async getAll(params = {}) {
     try {
-      const response = await api.get("/patients");
-      return response.data || [];
+      const response = await api.get("/patients", { params: { per_page: 20, ...params } });
+      const items = Array.isArray(response)
+        ? response
+        : Array.isArray(response?.data)
+        ? response.data
+        : response?.data?.items || response?.items || [];
+      return items;
     } catch (error) {
       console.error("Lỗi khi lấy danh sách bệnh nhân:", error.message);
       throw error;
     }
   },
+
+  async getPaginated(params = {}) {
+    try {
+      const response = await api.get("/patients", { params: { page: 1, per_page: 20, ...params } });
+      const payload = response?.data || response;
+      return {
+        items: payload.items || [],
+        total: payload.total || 0,
+        page: payload.page || 1,
+        per_page: payload.per_page || 20,
+        total_pages: payload.total_pages || 1,
+      };
+    } catch (error) {
+      console.error("Lỗi khi lấy danh sách phân trang bệnh nhân:", error.message);
+      throw error;
+    }
+  },
+
 
   /**
    * Lấy thông tin chi tiết một người cao tuổi theo ID.
@@ -99,14 +122,21 @@ const patientService = {
   async search(keyword = "") {
     try {
       const response = await api.get(`/patients/search`, {
-        params: { keyword },
+        params: { keyword, per_page: 100 },
       });
-      return response.data || [];
+      const items = Array.isArray(response)
+        ? response
+        : Array.isArray(response?.data)
+        ? response.data
+        : response?.data?.items || response?.items || [];
+      return items;
     } catch (error) {
       console.error("Lỗi khi tìm kiếm bệnh nhân:", error.message);
       throw error;
     }
   },
+
+
 
   /**
    * Lấy tổng số lượng bệnh nhân trong hệ thống.

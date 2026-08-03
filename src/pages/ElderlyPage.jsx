@@ -25,8 +25,12 @@ const normalizePatient = (patient) => {
     phone: patient.phone || "",
     address: patient.address || "",
     medicalConditions: patient.medical_history || patient.medicalConditions || "",
-    relativeName: patient.emergency_contact || patient.relativeName || "",
-    relativePhone: patient.emergency_phone || patient.relativePhone || "",
+    bloodType: patient.blood_group || patient.bloodType || "",
+    height: patient.height_cm || patient.height || "",
+    weight: patient.weight_kg || patient.weight || "",
+    allergy: patient.allergy || "Không có",
+    relativeName: patient.caregiver_name || patient.emergency_contact || patient.relativeName || "",
+    relativePhone: patient.caregiver_phone || patient.emergency_phone || patient.relativePhone || "",
     dateOfBirth: patient.dateOfBirth || "",
     notes: patient.notes || "",
     image: patient.image || "",
@@ -40,6 +44,11 @@ function ElderlyPage() {
 
   const [elderlyPeople, setElderlyPeople] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(20);
+  const [totalRecords, setTotalRecords] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+
   const [showModal, setShowModal] = useState(false);
   const [selectedPerson, setSelectedPerson] = useState(null);
   const [modalMode, setModalMode] = useState("add");
@@ -54,25 +63,42 @@ function ElderlyPage() {
     setLoading(true);
     setError(null);
     try {
-      let data = [];
-      if (searchTerm.trim()) {
-        data = await patientService.search(searchTerm.trim());
-      } else {
-        data = await patientService.getAll();
-      }
-      const normalizedData = (data || []).map(normalizePatient);
+      const res = await patientService.getPaginated({
+        page,
+        per_page: perPage,
+        keyword: searchTerm.trim() || undefined,
+      });
+      const normalizedData = (res.items || []).map(normalizePatient);
       setElderlyPeople(normalizedData);
+      setTotalRecords(res.total || 0);
+      setTotalPages(res.total_pages || 1);
     } catch (err) {
       console.error("Lỗi khi tải danh sách người cao tuổi:", err);
       setError(err.message || "Không thể tải danh sách người cao tuổi từ máy chủ.");
     } finally {
       setLoading(false);
     }
-  }, [searchTerm]);
+  }, [page, perPage, searchTerm]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  const handleSearchChange = (event) => {
+    setSearchTerm(event.target.value);
+    setPage(1);
+  };
+
+  const handlePageChange = (newPage) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setPage(newPage);
+    }
+  };
+
+  const handlePerPageChange = (newPerPage) => {
+    setPerPage(newPerPage);
+    setPage(1);
+  };
 
   // ============================
   // Handlers cho Modal
@@ -108,7 +134,6 @@ function ElderlyPage() {
   const handleSave = async (personData) => {
     setLoading(true);
     try {
-      // Tính toán tuổi từ dateOfBirth nếu có hoặc lấy từ age
       let calculatedAge = parseInt(personData.age, 10);
       if (isNaN(calculatedAge) || calculatedAge <= 0) {
         if (personData.dateOfBirth) {
@@ -116,21 +141,22 @@ function ElderlyPage() {
           const currentYear = new Date().getFullYear();
           calculatedAge = currentYear - birthYear;
         } else {
-          calculatedAge = 65; // Mặc định nếu không nhập
+          calculatedAge = 65;
         }
       }
 
-      // Đóng gói payload khớp chính xác với Model Backend MySQL
       const payload = {
         full_name: (personData.fullName || personData.full_name || "").trim(),
         age: calculatedAge,
         gender: personData.gender || "Nam",
         phone: personData.phone || "",
         address: personData.address || "",
+        allergy: personData.allergy || "",
         emergency_contact: personData.relativeName || personData.emergency_contact || "",
         emergency_phone: personData.relativePhone || personData.emergency_phone || "",
         medical_history: personData.medicalConditions || personData.medical_history || "",
       };
+
 
       if (modalMode === "edit" && selectedPerson) {
         const targetId = selectedPerson.patient_id || selectedPerson.id;
@@ -171,19 +197,11 @@ function ElderlyPage() {
     }
   };
 
-  // ============================
-  // Metadata & Display
-  // ============================
-
   const modalTitle = {
     add: "Thêm người cao tuổi",
     edit: "Cập nhật hồ sơ người cao tuổi",
     view: "Thông tin chi tiết",
   }[modalMode];
-
-  // ============================
-  // Render Interface
-  // ============================
 
   return (
     <section className="container-fluid px-3 px-md-4 py-4">
@@ -209,9 +227,9 @@ function ElderlyPage() {
             <input
               type="search"
               className="form-control bg-light border-start-0"
-              placeholder="Tìm theo họ và tên..."
+              placeholder="Tìm theo họ tên, sđt, mã..."
               value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
+              onChange={handleSearchChange}
             />
           </div>
         </div>
@@ -233,10 +251,17 @@ function ElderlyPage() {
 
       <ElderlyTable
         elderlyPeople={elderlyPeople}
+        totalRecords={totalRecords}
+        page={page}
+        perPage={perPage}
+        totalPages={totalPages}
+        onPageChange={handlePageChange}
+        onPerPageChange={handlePerPageChange}
         onView={handleView}
         onEdit={handleEdit}
         onDelete={handleDelete}
       />
+
 
       <ElderlyModal show={showModal} onHide={handleCloseModal} title={modalTitle}>
         <ElderlyForm
