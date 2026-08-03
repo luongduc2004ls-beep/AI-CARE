@@ -13,6 +13,7 @@ from database import db
 from routes.medicine_routes import medicine_bp
 from routes.dashboard_routes import dashboard_bp
 from routes.patient_routes import patient_bp
+from routes.camera_routes import camera_bp
 
 # Import Error Handler
 from middleware.exception import register_error
@@ -42,6 +43,8 @@ register_error(app)
 app.register_blueprint(medicine_bp, url_prefix="/api")
 app.register_blueprint(dashboard_bp, url_prefix="/api")
 app.register_blueprint(patient_bp, url_prefix="/api")
+app.register_blueprint(camera_bp, url_prefix="/api")
+
 
 
 

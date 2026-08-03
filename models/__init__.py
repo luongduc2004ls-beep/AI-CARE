@@ -4,3 +4,5 @@ from .medicine_schedule import MedicineSchedule
 from .health_record import HealthRecord
 from .notification import Notification
 from .fall_history import FallHistory
+from .camera import Camera
+
