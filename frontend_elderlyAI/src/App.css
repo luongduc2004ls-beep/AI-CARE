@@ -1,0 +1,179 @@
+/* Khung nội dung chính giữ màu nền linh hoạt theo chủ đề */
+.app-main-content {
+  min-height: 100vh;
+  background-color: var(--bg-main) !important;
+  transition: background-color 0.25s ease;
+}
+
+/* Header Sticky styling */
+header.sticky-top {
+  background-color: var(--bg-header-glass) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border-color) !important;
+  transition: background-color 0.25s ease, border-color 0.25s ease;
+}
+
+/* Card overrides */
+.card,
+.medicine-management-card,
+.stat-card,
+.dashboard-summary-card {
+  background-color: var(--bg-card) !important;
+  color: var(--text-main) !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 16px;
+  box-shadow: var(--card-shadow) !important;
+  transition: transform 0.25s ease, box-shadow 0.25s ease, background-color 0.25s ease, border-color 0.25s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--card-shadow-hover) !important;
+}
+
+/* Table Overrides */
+.table,
+.medicine-table {
+  margin-bottom: 0;
+  color: var(--text-main) !important;
+  --bs-table-bg: transparent;
+  --bs-table-color: var(--text-main);
+  --bs-table-hover-bg: var(--table-hover-bg);
+}
+
+.table thead th,
+.medicine-table thead th {
+  padding: 1rem;
+  white-space: nowrap;
+  vertical-align: middle;
+  background-color: var(--table-header-bg) !important;
+  color: var(--text-muted) !important;
+  border-bottom: 1px solid var(--border-color) !important;
+}
+
+.table tbody td,
+.medicine-table tbody td {
+  padding: 0.9rem 1rem;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--border-color) !important;
+  color: var(--text-main) !important;
+}
+
+.table tbody tr,
+.medicine-table tbody tr {
+  transition: background-color 0.2s ease;
+}
+
+.table tbody tr:hover,
+.medicine-table tbody tr:hover {
+  background-color: var(--table-hover-bg) !important;
+}
+
+/* Form inputs & controls */
+.form-control,
+.form-select {
+  background-color: var(--input-bg) !important;
+  color: var(--text-main) !important;
+  border: 1px solid var(--input-border) !important;
+}
+
+.form-control::placeholder {
+  color: var(--text-subtle) !important;
+}
+
+.form-control:focus,
+.form-select:focus {
+  border-color: var(--input-focus-border) !important;
+  box-shadow: 0 0 0 0.25rem rgba(59, 130, 246, 0.25) !important;
+}
+
+.input-group-text {
+  background-color: var(--bg-card-subtle) !important;
+  color: var(--text-muted) !important;
+  border-color: var(--input-border) !important;
+}
+
+/* Buttons & Interactive Elements */
+.medicine-action-button {
+  min-height: 34px;
+}
+
+.medicine-search-input {
+  min-height: 44px;
+  border-radius: 10px;
+}
+
+.btn-light {
+  background-color: var(--bg-card-subtle) !important;
+  color: var(--text-main) !important;
+  border-color: var(--border-color) !important;
+}
+
+.btn-light:hover {
+  background-color: var(--table-hover-bg) !important;
+  border-color: var(--input-focus-border) !important;
+}
+
+/* Modal Overrides */
+.modal-content,
+.medicine-modal .modal-content {
+  background-color: var(--bg-card) !important;
+  color: var(--text-main) !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 16px;
+  box-shadow: var(--card-shadow-hover) !important;
+}
+
+.modal-header,
+.modal-footer {
+  border-color: var(--border-color) !important;
+}
+
+/* List group overrides */
+.list-group-item {
+  background-color: var(--bg-card) !important;
+  color: var(--text-main) !important;
+  border-color: var(--border-color) !important;
+}
+
+/* Bootstrap helper color adjustments for dark mode */
+[data-bs-theme="dark"] .text-dark, .dark-theme .text-dark {
+  color: var(--text-main) !important;
+}
+
+[data-bs-theme="dark"] .text-muted, .dark-theme .text-muted {
+  color: var(--text-muted) !important;
+}
+
+[data-bs-theme="dark"] .bg-light, .dark-theme .bg-light {
+  background-color: var(--bg-card-subtle) !important;
+}
+
+[data-bs-theme="dark"] .bg-white, .dark-theme .bg-white {
+  background-color: var(--bg-card) !important;
+}
+
+[data-bs-theme="dark"] .badge.text-bg-light, .dark-theme .badge.text-bg-light {
+  background-color: var(--bg-card-subtle) !important;
+  color: var(--text-muted) !important;
+  border-color: var(--border-color) !important;
+}
+
+@media (max-width: 991.98px) {
+  .app-main-content {
+    min-height: auto;
+  }
+}
+
+@media (max-width: 575.98px) {
+  .medicine-management-card .card-body {
+    padding: 1rem;
+  }
+
+  .medicine-table thead th,
+  .medicine-table tbody td {
+    padding: 0.75rem;
+  }
+}
+

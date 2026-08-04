@@ -1,0 +1,109 @@
+/* Design Tokens & Theme Variable System */
+:root, [data-bs-theme="light"], .light-theme {
+  font-family: "Segoe UI", Roboto, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  
+  /* Light Theme Colors */
+  --bg-main: #f4f7fb;
+  --bg-card: #ffffff;
+  --bg-card-subtle: #f8fafc;
+  --bg-header: #ffffff;
+  --bg-header-glass: rgba(255, 255, 255, 0.88);
+  --bg-sidebar-gradient: linear-gradient(180deg, #1e3a8a 0%, #1d4ed8 100%);
+  --sidebar-active-bg: rgba(255, 255, 255, 0.2);
+
+  --text-main: #1e293b;
+  --text-heading: #0f172a;
+  --text-muted: #64748b;
+  --text-subtle: #94a3b8;
+
+  --border-color: #e2e8f0;
+  --border-subtle: #f1f5f9;
+
+  --input-bg: #ffffff;
+  --input-border: #cbd5e1;
+  --input-focus-border: #3b82f6;
+
+  --card-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
+  --card-shadow-hover: 0 12px 24px -4px rgba(15, 23, 42, 0.12);
+
+  --table-header-bg: #f8fafc;
+  --table-hover-bg: #eef5ff;
+  --dropdown-bg: #ffffff;
+
+  --summary-primary-bg: #eef5ff;
+  --summary-primary-border: #cfe2ff;
+  --summary-success-bg: #edf9f1;
+  --summary-success-border: #c9ead5;
+  --summary-warning-bg: #fff8e6;
+  --summary-warning-border: #ffe69c;
+  --summary-danger-bg: #fff0f1;
+  --summary-danger-border: #f5c2c7;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+[data-bs-theme="dark"], .dark-theme {
+  /* Dark Theme Colors */
+  --bg-main: #0b0f19;
+  --bg-card: #131b2e;
+  --bg-card-subtle: #19233c;
+  --bg-header: #0f172a;
+  --bg-header-glass: rgba(15, 23, 42, 0.85);
+  --bg-sidebar-gradient: linear-gradient(180deg, #0b0f19 0%, #131b2e 100%);
+  --sidebar-active-bg: rgba(59, 130, 246, 0.25);
+
+  --text-main: #f8fafc;
+  --text-heading: #ffffff;
+  --text-muted: #94a3b8;
+  --text-subtle: #64748b;
+
+  --border-color: rgba(255, 255, 255, 0.1);
+  --border-subtle: rgba(255, 255, 255, 0.06);
+
+  --input-bg: #0b0f19;
+  --input-border: #334155;
+  --input-focus-border: #60a5fa;
+
+  --card-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 0 1px 1px rgba(255, 255, 255, 0.05);
+  --card-shadow-hover: 0 20px 35px -5px rgba(0, 0, 0, 0.6), 0 0 1px 1px rgba(59, 130, 246, 0.2);
+
+  --table-header-bg: #0f172a;
+  --table-hover-bg: rgba(255, 255, 255, 0.04);
+  --dropdown-bg: #131b2e;
+
+  --summary-primary-bg: rgba(13, 110, 253, 0.15);
+  --summary-primary-border: rgba(13, 110, 253, 0.3);
+  --summary-success-bg: rgba(25, 135, 84, 0.15);
+  --summary-success-border: rgba(25, 135, 84, 0.3);
+  --summary-warning-bg: rgba(255, 193, 7, 0.15);
+  --summary-warning-border: rgba(255, 193, 7, 0.3);
+  --summary-danger-bg: rgba(220, 53, 69, 0.15);
+  --summary-danger-border: rgba(220, 53, 69, 0.3);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 320px;
+  margin: 0;
+  background-color: var(--bg-main) !important;
+  color: var(--text-main) !important;
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+#root {
+  min-height: 100vh;
+}
+

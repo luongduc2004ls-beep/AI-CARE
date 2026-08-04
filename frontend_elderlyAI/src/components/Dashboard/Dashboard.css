@@ -1,0 +1,144 @@
+/* ============================
+   Dashboard - Welcome Card
+============================ */
+.welcome-card {
+  background: linear-gradient(135deg, #0d6efd 0%, #6610f2 100%);
+  border-radius: 16px;
+  color: #fff;
+  overflow: hidden;
+  position: relative;
+}
+
+.welcome-card::after {
+  content: "";
+  position: absolute;
+  right: -40px;
+  top: -40px;
+  width: 180px;
+  height: 180px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 50%;
+}
+
+.welcome-card::before {
+  content: "";
+  position: absolute;
+  right: 40px;
+  bottom: -60px;
+  width: 120px;
+  height: 120px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 50%;
+}
+
+/* Thông tin lịch uống và lời nhắc được hiển thị trong Welcome Card. */
+.welcome-info-box {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+}
+
+.welcome-info-icon {
+  flex-shrink: 0;
+  font-size: 1.35rem;
+}
+
+/* ============================
+   Dashboard - Statistic Card
+============================ */
+.stat-card,
+.dashboard-summary-card {
+  border-radius: 16px;
+}
+
+.stat-card {
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 0.75rem 1.5rem rgba(39, 54, 75, 0.12) !important;
+}
+
+.stat-icon-wrapper {
+  width: 60px;
+  height: 60px;
+  border-radius: 14px;
+  flex-shrink: 0;
+  font-size: 1.5rem;
+}
+
+/* ============================
+   Dashboard - Summary
+============================ */
+.summary-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.summary-item:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 0.5rem 1rem rgba(39, 54, 75, 0.08);
+}
+
+.summary-item-primary { background-color: #eef5ff; border-color: #cfe2ff; }
+.summary-item-success { background-color: #edf9f1; border-color: #c9ead5; }
+.summary-item-warning { background-color: #fff8e6; border-color: #ffe69c; }
+.summary-item-danger { background-color: #fff0f1; border-color: #f5c2c7; }
+
+.summary-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  font-size: 1.25rem;
+  background-color: #fff;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.summary-label {
+  color: #667085;
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+/* ============================
+   Dashboard - Section title
+============================ */
+.dashboard-section-title {
+  font-weight: 700;
+  color: #344054;
+  margin-bottom: 1rem;
+}
+
+/* Điều chỉnh khoảng cách, kích thước icon và chữ cho điện thoại. */
+@media (max-width: 575.98px) {
+  .welcome-card {
+    border-radius: 12px;
+  }
+
+  .stat-icon-wrapper {
+    width: 52px;
+    height: 52px;
+    font-size: 1.3rem;
+  }
+
+  .summary-item {
+    padding: 0.8rem;
+  }
+
+  .summary-label {
+    white-space: normal;
+  }
+}

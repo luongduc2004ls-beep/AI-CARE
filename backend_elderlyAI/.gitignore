@@ -1,0 +1,15 @@
+# Python virtual environment & cache
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Database & local secrets
+instance/*.db
+.env
+
+# Logs
+*.log
+logs/

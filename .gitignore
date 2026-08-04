@@ -1,0 +1,25 @@
+# Node modules & build artifacts
+node_modules/
+frontend_elderlyAI/node_modules/
+dist/
+frontend_elderlyAI/dist/
+build/
+
+# Python Virtual Environment & Cache
+.venv/
+backend_elderlyAI/.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environment variables
+.env
+.env.local
+
+# IDE & OS files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
