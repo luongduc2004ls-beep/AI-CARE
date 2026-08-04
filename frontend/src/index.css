@@ -1,0 +1,31 @@
+/* Thiết lập nền tảng trực quan, ưu tiên độ tương phản và cỡ chữ dễ đọc. */
+:root {
+  font-family: "Segoe UI", Roboto, Arial, sans-serif;
+  color: #27364b;
+  background-color: #f4f7fb;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 320px;
+  margin: 0;
+  background-color: #f4f7fb;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+#root {
+  min-height: 100vh;
+}
