@@ -11,43 +11,131 @@ from models.user import User
 INITIAL_CAMERAS = [
     {
         "camera_id": 1,
-        "name": "Camera AI - Phòng Ngủ Cụ Nguyễn Văn A",
+        "patient_id": "PAT10000",
+        "patient_name": "Hồ Thanh Khánh",
+        "age": 71,
+        "gender": "Nam",
+        "device_id": "D1000",
+        "name": "Camera Ezviz AI - Phòng Ngủ 101 Cụ Hồ Thanh Khánh",
         "rtsp_url": "rtsp://192.168.1.101:554/stream1",
         "location": "Phòng Ngủ 101",
         "status": "ONLINE",
         "ai_enabled": True,
         "sensitivity": "High",
-        "created_at": "2026-08-01 08:00:00"
+        "caregiver_name": "Phan Thị An (Con gái)",
+        "caregiver_phone": "0851745822"
     },
     {
         "camera_id": 2,
-        "name": "Camera AI - Phòng Khách Trung Tâm",
+        "patient_id": "PAT10001",
+        "patient_name": "Phan Anh Thảo",
+        "age": 74,
+        "gender": "Nữ",
+        "device_id": "D1001",
+        "name": "Camera Imou AI - Phòng Khách Cụ Phan Anh Thảo",
         "rtsp_url": "rtsp://192.168.1.102:554/stream1",
-        "location": "Phòng Khách",
+        "location": "Phòng Khách Trung Tâm",
         "status": "ONLINE",
         "ai_enabled": True,
         "sensitivity": "Medium",
-        "created_at": "2026-08-01 08:30:00"
+        "caregiver_name": "Lê Thanh Chi (Vợ)",
+        "caregiver_phone": "0394652227"
     },
     {
         "camera_id": 3,
-        "name": "Camera AI - Nhà Vệ Sinh Tầng 1",
+        "patient_id": "PAT10002",
+        "patient_name": "Đỗ Thanh Phong",
+        "age": 68,
+        "gender": "Nam",
+        "device_id": "D1002",
+        "name": "Camera AI - Nhà Vệ Sinh Cụ Đỗ Thanh Phong",
         "rtsp_url": "rtsp://192.168.1.103:554/stream1",
         "location": "Nhà Vệ Sinh Tầng 1",
         "status": "ONLINE",
         "ai_enabled": True,
         "sensitivity": "High",
-        "created_at": "2026-08-02 09:15:00"
+        "caregiver_name": "Đặng Quốc An (Con trai)",
+        "caregiver_phone": "0960768603"
     },
     {
         "camera_id": 4,
-        "name": "Camera AI - Hành Lang Tầng 2",
+        "patient_id": "PAT10003",
+        "patient_name": "Phan Ngọc Ngọc",
+        "age": 73,
+        "gender": "Nam",
+        "device_id": "D1003",
+        "name": "Camera Tapo AI - Hành Lang Cụ Phan Ngọc Ngọc",
         "rtsp_url": "rtsp://192.168.1.104:554/stream1",
         "location": "Hành Lang Tầng 2",
         "status": "ONLINE",
-        "ai_enabled": False,
-        "sensitivity": "Low",
-        "created_at": "2026-08-02 10:00:00"
+        "ai_enabled": True,
+        "sensitivity": "Medium",
+        "caregiver_name": "Phan Minh Bình (Con trai)",
+        "caregiver_phone": "0952394419"
+    },
+    {
+        "camera_id": 5,
+        "patient_id": "PAT10000",
+        "patient_name": "Hồ Thanh Khánh",
+        "age": 71,
+        "gender": "Nam",
+        "device_id": "D1004",
+        "name": "Camera AI - Nhà Vệ Sinh 101 Cụ Hồ Thanh Khánh",
+        "rtsp_url": "rtsp://192.168.1.105:554/stream1",
+        "location": "Nhà Vệ Sinh 101",
+        "status": "ONLINE",
+        "ai_enabled": True,
+        "sensitivity": "High",
+        "caregiver_name": "Phan Thị An (Con gái)",
+        "caregiver_phone": "0851745822"
+    },
+    {
+        "camera_id": 6,
+        "patient_id": "PAT10001",
+        "patient_name": "Phan Anh Thảo",
+        "age": 74,
+        "gender": "Nữ",
+        "device_id": "D1005",
+        "name": "Camera Tapo AI - Phòng Ngủ Cụ Phan Anh Thảo",
+        "rtsp_url": "rtsp://192.168.1.106:554/stream1",
+        "location": "Phòng Ngủ 201",
+        "status": "ONLINE",
+        "ai_enabled": True,
+        "sensitivity": "Medium",
+        "caregiver_name": "Lê Thanh Chi (Vợ)",
+        "caregiver_phone": "0394652227"
+    },
+    {
+        "camera_id": 7,
+        "patient_id": "PAT10002",
+        "patient_name": "Đỗ Thanh Phong",
+        "age": 68,
+        "gender": "Nam",
+        "device_id": "D1006",
+        "name": "Camera Ezviz AI - Phòng Ngủ Cụ Đỗ Thanh Phong",
+        "rtsp_url": "rtsp://192.168.1.107:554/stream1",
+        "location": "Phòng Ngủ 102",
+        "status": "ONLINE",
+        "ai_enabled": True,
+        "sensitivity": "Medium",
+        "caregiver_name": "Đặng Quốc An (Con trai)",
+        "caregiver_phone": "0960768603"
+    },
+    {
+        "camera_id": 8,
+        "patient_id": "PAT10003",
+        "patient_name": "Phan Ngọc Ngọc",
+        "age": 73,
+        "gender": "Nam",
+        "device_id": "D1007",
+        "name": "Camera Yoosee AI - Phòng Ăn Cụ Phan Ngọc Ngọc",
+        "rtsp_url": "rtsp://192.168.1.108:554/stream1",
+        "location": "Phòng Bếp & Nhà Ăn",
+        "status": "ONLINE",
+        "ai_enabled": True,
+        "sensitivity": "Medium",
+        "caregiver_name": "Phan Minh Bình (Con trai)",
+        "caregiver_phone": "0952394419"
     }
 ]
 
@@ -136,7 +224,7 @@ def add_new_camera(data):
         return {"success": True, "data": new_cam, "message": "Thêm camera thành công (In-memory)"}, 201
 
 
-def trigger_fall_simulation(camera_id):
+def trigger_fall_simulation(camera_id, snapshot_url=None):
     """
     Giả lập / Thực thi phân tích AI phát hiện ngã từ Camera
     Tính toán chỉ số Pose AI:
@@ -178,7 +266,7 @@ def trigger_fall_simulation(camera_id):
             user_id=user_id,
             location=location,
             severity="KHẨN CẤP",
-            image="fall_snapshot_demo.jpg",
+            image="fall_snapshot_live.jpg",
             fall_time=datetime.utcnow()
         )
         db.session.add(fall_rec)
@@ -216,7 +304,7 @@ def trigger_fall_simulation(camera_id):
             "vertical_velocity_m_s": 3.85,
             "motionless_duration_sec": 4.2
         },
-        "snapshot_url": "https://images.unsplash.com/photo-1516549655169-df83a0774514?auto=format&fit=crop&w=800&q=80"
+        "snapshot_url": snapshot_url or "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22800%22%20height%3D%22500%22%3E%3Crect%20width%3D%22800%22%20height%3D%22500%22%20fill%3D%22%230f172a%22%2F%3E%3Ctext%20x%3D%22400%22%20y%3D%22250%22%20fill%3D%22%23ef4444%22%20font-family%3D%22sans-serif%22%20font-size%3D%2220%22%20text-anchor%3D%22middle%22%3E%F0%9F%9A%A8%20LIVE%20SNAPSHOT%20CAPTURED%20ON%20ANOMALY%3C%2Ftext%3E%3C%2Fsvg%3E"
     }
 
     ACTIVE_FALL_ALERTS.insert(0, alert_event)

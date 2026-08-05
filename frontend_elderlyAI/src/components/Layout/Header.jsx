@@ -17,6 +17,27 @@ function Header() {
   const dropdownRef = useRef(null);
   const searchRef = useRef(null);
 
+  // Logic tự động ẩn/hiện Header linh hoạt khi cuộn chuột (Smart Autohide Header)
+  const [showHeader, setShowHeader] = useState(true);
+  const lastScrollY = useRef(0);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+      if (currentScrollY < 30) {
+        setShowHeader(true);
+      } else if (currentScrollY > lastScrollY.current + 5) {
+        setShowHeader(false);
+      } else if (currentScrollY < lastScrollY.current - 5) {
+        setShowHeader(true);
+      }
+      lastScrollY.current = currentScrollY;
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
   const handleSearchChange = (e) => {
     const val = e.target.value;
     setSearchQuery(val);
@@ -59,7 +80,7 @@ function Header() {
   }, []);
 
   return (
-    <header className="px-3 px-md-4 py-3 sticky-top" style={{ zIndex: 1020 }}>
+    <header className={`px-3 px-md-4 py-3 sticky-top header-autohide ${showHeader ? "header-visible" : "header-hidden"}`} style={{ zIndex: 1020 }}>
       <div className="container-fluid px-0">
         <div className="d-flex justify-content-between align-items-center gap-3 flex-wrap">
           <div>

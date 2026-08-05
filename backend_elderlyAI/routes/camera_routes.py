@@ -34,7 +34,9 @@ def trigger_fall(camera_id):
     """
     Kích hoạt chạy thử phát hiện ngã từ Camera (Trial Run)
     """
-    res = trigger_fall_simulation(camera_id)
+    data = request.get_json() or {}
+    snapshot_url = data.get("snapshot_url")
+    res = trigger_fall_simulation(camera_id, snapshot_url=snapshot_url)
     return jsonify(res), 200
 
 

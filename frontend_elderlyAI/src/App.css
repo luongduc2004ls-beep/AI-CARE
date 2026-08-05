@@ -5,13 +5,28 @@
   transition: background-color 0.25s ease;
 }
 
-/* Header Sticky styling */
+/* Header Sticky & Autohide styling */
 header.sticky-top {
+  position: sticky;
+  top: 0;
   background-color: var(--bg-header-glass) !important;
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border-color) !important;
-  transition: background-color 0.25s ease, border-color 0.25s ease;
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease, background-color 0.25s ease, border-color 0.25s ease !important;
+  will-change: transform, opacity;
+}
+
+header.header-hidden {
+  transform: translateY(-100%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+header.header-visible {
+  transform: translateY(0);
+  opacity: 1;
+  pointer-events: auto;
 }
 
 /* Card overrides */
@@ -138,26 +153,37 @@ header.sticky-top {
 }
 
 /* Bootstrap helper color adjustments for dark mode */
-[data-bs-theme="dark"] .text-dark, .dark-theme .text-dark {
+[data-bs-theme="dark"] .text-dark, .dark-theme .text-dark,
+[data-bs-theme="dark"] .text-body, .dark-theme .text-body {
   color: var(--text-main) !important;
 }
 
-[data-bs-theme="dark"] .text-muted, .dark-theme .text-muted {
+[data-bs-theme="dark"] .text-muted, .dark-theme .text-muted,
+[data-bs-theme="dark"] .text-secondary, .dark-theme .text-secondary {
   color: var(--text-muted) !important;
 }
 
-[data-bs-theme="dark"] .bg-light, .dark-theme .bg-light {
+[data-bs-theme="dark"] .bg-light, .dark-theme .bg-light,
+[data-bs-theme="dark"] .bg-body-tertiary, .dark-theme .bg-body-tertiary {
   background-color: var(--bg-card-subtle) !important;
+  color: var(--text-main) !important;
 }
 
 [data-bs-theme="dark"] .bg-white, .dark-theme .bg-white {
   background-color: var(--bg-card) !important;
+  color: var(--text-main) !important;
 }
 
 [data-bs-theme="dark"] .badge.text-bg-light, .dark-theme .badge.text-bg-light {
   background-color: var(--bg-card-subtle) !important;
-  color: var(--text-muted) !important;
+  color: var(--text-main) !important;
   border-color: var(--border-color) !important;
+}
+
+[data-bs-theme="dark"] .table-light, .dark-theme .table-light {
+  --bs-table-bg: var(--table-header-bg) !important;
+  --bs-table-color: var(--text-main) !important;
+  color: var(--text-main) !important;
 }
 
 @media (max-width: 991.98px) {

@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import {
   FaExclamationTriangle,
   FaPhoneAlt,
@@ -7,11 +7,16 @@ import {
   FaVideo,
   FaUserInjured,
   FaClock,
-  FaMapMarkerAlt
+  FaMapMarkerAlt,
+  FaCamera,
+  FaSearchPlus
 } from "react-icons/fa";
+import { generateSimulatedSnapshotSVG } from "../../utils/snapshot";
 import "./FallAlertModal.css";
 
 const FallAlertModal = ({ alert, onClose, onAcknowledge }) => {
+  const [showZoom, setShowZoom] = useState(false);
+
   if (!alert) return null;
 
   // Phát âm thanh báo động khẩn cấp bằng Web Audio API
@@ -62,6 +67,13 @@ const FallAlertModal = ({ alert, onClose, onAcknowledge }) => {
     snapshot_url
   } = alert;
 
+  const displaySnapshot = snapshot_url || generateSimulatedSnapshotSVG({
+    camera_name,
+    location,
+    time: detected_at,
+    spine_angle: ai_analytics?.spine_angle_deg || 78.5
+  });
+
   return (
     <div className="fall-alert-overlay">
       <div className="fall-alert-modal shadow-lg">
@@ -73,7 +85,7 @@ const FallAlertModal = ({ alert, onClose, onAcknowledge }) => {
             </div>
             <div>
               <h5 className="mb-0 fw-bold">🚨 CẢNH BÁO NGUY CẤP: PHÁT HIỆN NGÃ!</h5>
-              <small className="opacity-75">Tín hiệu cảnh báo thời gian thực từ Camera AI</small>
+              <small className="opacity-75">Hình ảnh được chụp lại trực tiếp khi nhận diện bất thường trên Camera AI</small>
             </div>
           </div>
           <button className="btn-close btn-close-white" onClick={onClose}></button>
@@ -83,10 +95,26 @@ const FallAlertModal = ({ alert, onClose, onAcknowledge }) => {
           <div className="row g-4">
             {/* Live Camera Snapshot & Overlay */}
             <div className="col-md-6">
-              <div className="snapshot-container position-relative rounded overflow-hidden shadow-sm border border-danger">
+              <div className="d-flex align-items-center justify-content-between mb-2">
+                <span className="badge bg-danger text-white px-2.5 py-1.5 extra-small fw-bold d-flex align-items-center gap-1 shadow-sm">
+                  <FaCamera className="me-1 animate-pulse" /> HÌNH CHỤP TRỰC TIẾP TẠI THỜI ĐIỂM BẤT THƯỜNG
+                </span>
+                <button 
+                  className="btn btn-sm btn-outline-danger py-0 px-2 extra-small fw-bold d-flex align-items-center gap-1"
+                  onClick={() => setShowZoom(true)}
+                >
+                  <FaSearchPlus /> Phóng to
+                </button>
+              </div>
+
+              <div 
+                className="snapshot-container position-relative rounded overflow-hidden shadow-sm border border-danger cursor-pointer"
+                onClick={() => setShowZoom(true)}
+                title="Nhấp để phóng to ảnh chụp trực tiếp khi nhận diện bất thường"
+              >
                 <img
-                  src={snapshot_url || "https://images.unsplash.com/photo-1516549655169-df83a0774514?auto=format&fit=crop&w=800&q=80"}
-                  alt="Fall Event Snapshot"
+                  src={displaySnapshot}
+                  alt="Fall Event Live Snapshot"
                   className="img-fluid w-100 object-fit-cover"
                   style={{ maxHeight: "260px" }}
                 />
@@ -94,11 +122,11 @@ const FallAlertModal = ({ alert, onClose, onAcknowledge }) => {
                 {/* Pose AI Bounding Box Overlay */}
                 <div className="pose-bounding-box position-absolute">
                   <span className="badge bg-danger position-absolute top-0 start-0 translate-middle-y ms-2">
-                    FALL DETECTED (96.8%)
+                    FALL DETECTED ({((ai_analytics?.confidence || 0.968) * 100).toFixed(1)}%)
                   </span>
                 </div>
 
-                <div className="position-absolute bottom-0 start-0 w-100 bg-dark bg-opacity-75 text-white p-2 text-center small d-flex justify-content-between px-3">
+                <div className="position-absolute bottom-0 start-0 w-100 bg-dark bg-opacity-85 text-white p-2 text-center small d-flex justify-content-between px-3 font-monospace">
                   <span><FaVideo className="me-1 text-danger" /> {camera_name}</span>
                   <span><FaClock className="me-1 text-warning" /> {detected_at}</span>
                 </div>
@@ -109,7 +137,7 @@ const FallAlertModal = ({ alert, onClose, onAcknowledge }) => {
             <div className="col-md-6 d-flex flex-column justify-content-between">
               <div>
                 <h6 className="fw-bold text-dark border-bottom pb-2 mb-3">
-                  THÔNG TIN SỰ CỐ & CHỈ SỐ AI
+                  THÔNG TIN SỰ CỐ & CHỈ SỐ AI KHI CHỤP
                 </h6>
 
                 <ul className="list-group list-group-flush small mb-3">
@@ -139,7 +167,7 @@ const FallAlertModal = ({ alert, onClose, onAcknowledge }) => {
               <div className="alert alert-danger p-2 mb-0 small rounded d-flex align-items-center gap-2">
                 <FaExclamationTriangle className="fs-5 flex-shrink-0" />
                 <div>
-                  <strong>Chú ý:</strong> Nếu không có người xác nhận sau 30 giây, hệ thống sẽ tự động kích hoạt cuộc gọi cấp cứu tới người thân!
+                  <strong>Chú ý:</strong> Hình ảnh trên được chụp trực tiếp từ camera ngay khi AI nhận diện bất thường!
                 </div>
               </div>
             </div>
@@ -172,8 +200,28 @@ const FallAlertModal = ({ alert, onClose, onAcknowledge }) => {
           </div>
         </div>
       </div>
+
+      {/* Modal Zoom Hình Ảnh Chụp Khẩn Cấp */}
+      {showZoom && (
+        <div 
+          className="position-fixed top-0 start-0 w-100 h-100 bg-black bg-opacity-90 d-flex flex-column align-items-center justify-content-center p-3"
+          style={{ zIndex: 1100 }}
+          onClick={() => setShowZoom(false)}
+        >
+          <div className="text-end w-100 max-w-4xl mb-2">
+            <button className="btn btn-sm btn-light fw-bold" onClick={() => setShowZoom(false)}>✕ Đóng Xem Ảnh</button>
+          </div>
+          <div className="position-relative text-center max-w-4xl border border-danger rounded overflow-hidden shadow-lg bg-dark">
+            <img src={displaySnapshot} alt="Zoom Captured Anomaly Frame" className="img-fluid rounded" style={{ maxHeight: "80vh" }} />
+            <div className="position-absolute bottom-0 start-0 w-100 bg-black bg-opacity-75 text-white p-3 font-monospace small">
+              🚨 HÌNH ẢNH CHỤP TRỰC TIẾP KHI NHẬN DIỆN BẤT THƯỜNG • {camera_name} - {detected_at} ({location})
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
 export default FallAlertModal;
+
