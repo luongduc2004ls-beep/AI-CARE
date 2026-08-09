@@ -154,26 +154,29 @@ const LoginPage = () => {
 
           {/* Quick Login Presets */}
           <div className="pt-3 border-top">
-            <span className="small text-body-secondary d-block mb-3 text-center fw-semibold">Đăng nhập nhanh tài khoản thử nghiệm:</span>
+            <span className="small text-body-secondary d-block mb-2 text-center fw-semibold">Đăng nhập nhanh tài khoản trong bộ dữ liệu Excel (1,000 users & 5 admins):</span>
             <div className="d-grid gap-2">
               <button
                 type="button"
                 className="btn btn-body border text-start p-2 px-3 rounded-pill shadow-sm d-flex align-items-center justify-content-between gap-2"
-                onClick={() => handleQuickLogin("admin", "password123")}
+                onClick={() => handleQuickLogin("admin1", "password123")}
               >
-                <span className="small text-body fw-bold">🔑 Admin Quản Trị</span>
-                <span className="badge bg-primary text-white font-monospace extra-small">admin / password123</span>
+                <span className="small text-body fw-bold">🔑 Quản Trị Viên (Admin)</span>
+                <span className="badge bg-primary text-white font-monospace extra-small">admin1 / password123</span>
               </button>
 
               <button
                 type="button"
                 className="btn btn-body border text-start p-2 px-3 rounded-pill shadow-sm d-flex align-items-center justify-content-between gap-2"
-                onClick={() => handleQuickLogin("cunguyenana", "password123")}
+                onClick={() => handleQuickLogin("user1", "password123")}
               >
-                <span className="small text-body fw-bold">🔑 Người Thân Cụ A</span>
-                <span className="badge bg-success text-white font-monospace extra-small">cunguyenana / password123</span>
+                <span className="small text-body fw-bold">🔑 Người Dùng / Gia Đình</span>
+                <span className="badge bg-success text-white font-monospace extra-small">user1 / password123</span>
               </button>
             </div>
+            <small className="text-muted d-block text-center mt-2 extra-small">
+              💡 Thử nghiệm: Đăng nhập được với mọi tài khoản <strong>admin1..admin5</strong> hoặc <strong>user1..user1000</strong> (mật khẩu: <code>password123</code>).
+            </small>
           </div>
 
           {/* Register Redirect */}

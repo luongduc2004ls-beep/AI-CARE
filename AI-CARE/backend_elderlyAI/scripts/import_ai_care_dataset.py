@@ -246,6 +246,18 @@ def import_users(sheets):
     caregivers = sheets["Caregivers"].set_index("patient_id")
     doctors = sheets["Doctors"].set_index("patient_id")
 
+    users_df = sheets.get("Users")
+    users_by_patient_id = {}
+    if users_df is not None:
+        for idx, urow in users_df.iterrows():
+            pid = text(urow.get("patient_id"))
+            if pid and pid.isdigit():
+                pid_int = int(pid)
+                if 1 <= pid_int <= len(patients):
+                    pid = text(patients.iloc[pid_int - 1]["patient_id"])
+            if pid:
+                users_by_patient_id[pid] = urow
+
     users = {
         user.patient_code: user
         for user in User.query.filter(User.patient_code.isnot(None)).all()
@@ -270,6 +282,19 @@ def import_users(sheets):
         doctor = doctors.loc[patient_code] if patient_code in doctors.index else {}
         caregiver_phone = phone(caregiver.get("caregiver_phone")) if hasattr(caregiver, "get") else None
 
+        user_info = users_by_patient_id.get(patient_code)
+        if user_info is not None:
+            user.username = text(user_info.get("username")) or f"user{index + 1}"
+            user.role = text(user_info.get("role")) or "User"
+        else:
+            if not user.username:
+                user.username = f"user_{patient_code.lower()}"
+            if not user.role:
+                user.role = "Caregiver"
+
+        if not user.password_hash:
+            user.set_password("password123")
+
         user.device_id = text(row["device_id"])
         user.full_name = text(row["name"]) or "Unknown patient"
         user.age = int_or_none(row["age"])
@@ -287,6 +312,54 @@ def import_users(sheets):
         commit_batch(index + 1)
 
     db.session.commit()
+
+    # Import Admins sheet if present
+    admins_df = sheets.get("Admins")
+    if admins_df is not None:
+        for index, row in admins_df.iterrows():
+            admin_username = text(row.get("username"))
+            if not admin_username:
+                continue
+            admin_user = User.query.filter_by(username=admin_username).first()
+            if admin_user is None:
+                admin_user = User(
+                    username=admin_username,
+                    email=text(row.get("email")) or f"{admin_username}@aicare.com",
+                    full_name=text(row.get("full_name")) or f"Quản Trị Viên {admin_username}",
+                    role="Admin",
+                    patient_code=f"ADMIN_{admin_username.upper()}"
+                )
+                admin_user.set_password("password123")
+                db.session.add(admin_user)
+                created += 1
+            else:
+                admin_user.role = "Admin"
+                admin_user.full_name = text(row.get("full_name")) or admin_user.full_name
+                if text(row.get("email")):
+                    admin_user.email = text(row.get("email"))
+                updated += 1
+        db.session.commit()
+
+    # Ensure default accounts
+    for default_item in [
+        {"username": "admin", "role": "Admin", "email": "admin@elderlyai.vn", "full_name": "Quản Trị Viên Hệ Thống"},
+        {"username": "cunguyenana", "role": "Caregiver", "email": "cunguyenana@elderlyai.vn", "full_name": "Cụ Nguyễn Văn A"}
+    ]:
+        def_user = User.query.filter_by(username=default_item["username"]).first()
+        if not def_user:
+            def_user = User(
+                username=default_item["username"],
+                role=default_item["role"],
+                email=default_item["email"],
+                full_name=default_item["full_name"],
+                patient_code=f"PATIENT_{default_item['username'].upper()}"
+            )
+            def_user.set_password("password123")
+            db.session.add(def_user)
+        else:
+            def_user.role = default_item["role"]
+    db.session.commit()
+
     return users, created, updated
 
 

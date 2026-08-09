@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { FaKey, FaUserCircle, FaSave, FaLock, FaEye, FaEyeSlash, FaCheckCircle, FaExclamationTriangle, FaUserShield, FaPhoneAlt, FaEnvelope } from "react-icons/fa";
 import { useAuth } from "../../context/AuthContext";
+import patientService from "../../services/patientService";
 import axios from "axios";
 
 const API_BASE_URL = window.location.hostname.includes("serveousercontent.com") || window.location.protocol === "https:"
@@ -8,7 +9,8 @@ const API_BASE_URL = window.location.hostname.includes("serveousercontent.com") 
   : `http://${window.location.hostname || "localhost"}:5000/api`;
 
 function AccountSettings() {
-  const { currentUser, login } = useAuth();
+  const { currentUser } = useAuth();
+  const [patient, setPatient] = useState(null);
 
   // State thông tin cá nhân
   const [profile, setProfile] = useState({
@@ -45,6 +47,27 @@ function AccountSettings() {
         emergencyContact: currentUser.emergency_contact || "",
         role: currentUser.role || "Caregiver",
       });
+
+      async function loadPatientDetails() {
+        try {
+          const res = await patientService.getPaginated({ page: 1, per_page: 50 });
+          const items = res.items || [];
+          const found = items.find(
+            (p) =>
+              p.patient_code === currentUser?.patient_code ||
+              p.patient_id === currentUser?.patient_id ||
+              p.id === currentUser?.user_id ||
+              p.full_name === currentUser?.full_name ||
+              p.name === currentUser?.full_name
+          );
+          if (found) {
+            setPatient(found);
+          }
+        } catch (err) {
+          console.warn("Could not load patient details:", err);
+        }
+      }
+      loadPatientDetails();
     }
   }, [currentUser]);
 
@@ -362,7 +385,9 @@ function AccountSettings() {
               <div className="col-12 col-sm-6 col-md-4 col-lg-3">
                 <div className="p-3 bg-body-tertiary rounded-4 border h-100">
                   <span className="text-info extra-small fw-bold text-uppercase d-block mb-1">1. Mã Bệnh Nhân (patient_id)</span>
-                  <strong className="text-primary fs-6 font-monospace d-block">PAT00001</strong>
+                  <strong className="text-primary fs-6 font-monospace d-block">
+                    {patient?.patient_code || currentUser?.patient_code || "PAT00001"}
+                  </strong>
                   <small className="text-body-secondary">Mã định danh hệ thống</small>
                 </div>
               </div>
@@ -371,7 +396,9 @@ function AccountSettings() {
               <div className="col-12 col-sm-6 col-md-4 col-lg-3">
                 <div className="p-3 bg-body-tertiary rounded-4 border h-100">
                   <span className="text-info extra-small fw-bold text-uppercase d-block mb-1">2. Mã Thiết Bị (device_id)</span>
-                  <strong className="text-info fs-6 font-monospace d-block">DEV0001</strong>
+                  <strong className="text-info fs-6 font-monospace d-block">
+                    {patient?.device_id || currentUser?.device_id || "DEV0001"}
+                  </strong>
                   <small className="text-body-secondary">Camera &amp; Vòng tay AI</small>
                 </div>
               </div>
@@ -380,7 +407,9 @@ function AccountSettings() {
               <div className="col-12 col-sm-6 col-md-4 col-lg-3">
                 <div className="p-3 bg-body-tertiary rounded-4 border h-100">
                   <span className="text-info extra-small fw-bold text-uppercase d-block mb-1">3. Họ và Tên (name)</span>
-                  <strong className="text-body fs-6 d-block">Cụ Nguyễn Văn A</strong>
+                  <strong className="text-body fs-6 d-block">
+                    {patient?.full_name || patient?.name || currentUser?.full_name || "Cụ Nguyễn Văn A"}
+                  </strong>
                   <small className="text-body-secondary">Bệnh nhân được theo dõi</small>
                 </div>
               </div>
@@ -389,8 +418,10 @@ function AccountSettings() {
               <div className="col-12 col-sm-6 col-md-4 col-lg-3">
                 <div className="p-3 bg-body-tertiary rounded-4 border h-100">
                   <span className="text-info extra-small fw-bold text-uppercase d-block mb-1">4. Tuổi (age)</span>
-                  <strong className="text-body fs-6 d-block">72 tuổi</strong>
-                  <small className="text-body-secondary">Sinh năm 1954</small>
+                  <strong className="text-body fs-6 d-block">
+                    {patient?.age ? `${patient.age} tuổi` : "72 tuổi"}
+                  </strong>
+                  <small className="text-body-secondary">Tuổi tác người thân</small>
                 </div>
               </div>
 
@@ -398,7 +429,9 @@ function AccountSettings() {
               <div className="col-12 col-sm-6 col-md-4 col-lg-3">
                 <div className="p-3 bg-body-tertiary rounded-4 border h-100">
                   <span className="text-info extra-small fw-bold text-uppercase d-block mb-1">5. Giới tính (gender)</span>
-                  <strong className="text-body fs-6 d-block">👨 Nam</strong>
+                  <strong className="text-body fs-6 d-block">
+                    {patient?.gender === "Nữ" ? "👩 Nữ" : "👨 Nam"}
+                  </strong>
                   <small className="text-body-secondary">Giới tính sinh học</small>
                 </div>
               </div>
@@ -407,7 +440,9 @@ function AccountSettings() {
               <div className="col-12 col-sm-6 col-md-4 col-lg-3">
                 <div className="p-3 bg-body-tertiary rounded-4 border h-100">
                   <span className="text-info extra-small fw-bold text-uppercase d-block mb-1">6. Số điện thoại (phone)</span>
-                  <strong className="text-body fs-6 d-block">0912 345 678</strong>
+                  <strong className="text-body fs-6 d-block">
+                    {patient?.phone || currentUser?.phone || "0912 345 678"}
+                  </strong>
                   <small className="text-body-secondary">Liên hệ chính</small>
                 </div>
               </div>
@@ -416,7 +451,9 @@ function AccountSettings() {
               <div className="col-12 col-sm-6 col-md-4 col-lg-3">
                 <div className="p-3 bg-body-tertiary rounded-4 border h-100">
                   <span className="text-info extra-small fw-bold text-uppercase d-block mb-1">7. Chiều cao (height_cm)</span>
-                  <strong className="text-body fs-6 d-block">165 cm</strong>
+                  <strong className="text-body fs-6 d-block">
+                    {patient?.height_cm || patient?.height ? `${patient.height_cm || patient.height} cm` : "165 cm"}
+                  </strong>
                   <small className="text-body-secondary">Chỉ số thể trạng</small>
                 </div>
               </div>
@@ -425,8 +462,10 @@ function AccountSettings() {
               <div className="col-12 col-sm-6 col-md-4 col-lg-3">
                 <div className="p-3 bg-body-tertiary rounded-4 border h-100">
                   <span className="text-info extra-small fw-bold text-uppercase d-block mb-1">8. Cân nặng (weight_kg)</span>
-                  <strong className="text-body fs-6 d-block">62.5 kg</strong>
-                  <small className="text-body-secondary">BMI: 22.9 (Bình thường)</small>
+                  <strong className="text-body fs-6 d-block">
+                    {patient?.weight_kg || patient?.weight ? `${patient.weight_kg || patient.weight} kg` : "62.5 kg"}
+                  </strong>
+                  <small className="text-body-secondary">Chỉ số thể trọng</small>
                 </div>
               </div>
 
@@ -434,8 +473,8 @@ function AccountSettings() {
               <div className="col-12 col-sm-6 col-md-4 col-lg-3">
                 <div className="p-3 bg-body-tertiary rounded-4 border h-100">
                   <span className="text-info extra-small fw-bold text-uppercase d-block mb-1">9. Nhóm máu (blood_group)</span>
-                  <span className="badge bg-danger bg-opacity-20 text-danger border border-danger border-opacity-25 px-3 py-2 fw-bold fs-6">
-                    🩸 Nhóm máu O+
+                  <span className="badge bg-danger text-white border border-danger px-3 py-2 fw-bold fs-6 shadow-sm">
+                    🩸 Nhóm máu {patient?.blood_group || patient?.bloodType || "O+"}
                   </span>
                 </div>
               </div>
@@ -444,7 +483,9 @@ function AccountSettings() {
               <div className="col-12 col-sm-6 col-md-8 col-lg-9">
                 <div className="p-3 bg-danger bg-opacity-10 rounded-4 border border-danger border-opacity-25 h-100">
                   <span className="text-danger extra-small fw-bold text-uppercase d-block mb-1">10. Thông tin dị ứng (allergy)</span>
-                  <strong className="text-danger fs-6 d-block">⚠️ Dị ứng Penicillin &amp; Phấn hoa cấp độ nhẹ</strong>
+                  <strong className="text-danger fs-6 d-block">
+                    ⚠️ {patient?.allergy || "Dị ứng Penicillin & Phấn hoa cấp độ nhẹ"}
+                  </strong>
                   <small className="text-body-secondary d-block mt-1">Cảnh báo tự động gửi cho hệ thống phân đơn thuốc AI khi kê đơn</small>
                 </div>
               </div>

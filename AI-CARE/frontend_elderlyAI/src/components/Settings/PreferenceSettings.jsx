@@ -57,8 +57,8 @@ function PreferenceSettings() {
                   style={{ cursor: "pointer" }}
                   onClick={() => handleThemeChange("light")}
                 >
-                  <div className="d-inline-flex p-3 bg-warning bg-opacity-20 text-warning rounded-circle mb-2 mx-auto">
-                    <FaSun className="fs-3 text-warning" />
+                  <div className="d-inline-flex p-3 bg-warning text-dark rounded-circle mb-2 mx-auto shadow-sm align-items-center justify-content-center" style={{ width: "56px", height: "56px" }}>
+                    <FaSun className="fs-3 text-dark" />
                   </div>
                   <h6 className="fw-bold mb-1 text-body">☀️ Giao Diện Sáng</h6>
                   <p className="text-muted small mb-0">Rõ ràng, trực quan cho ban ngày</p>
@@ -75,8 +75,8 @@ function PreferenceSettings() {
                   style={{ cursor: "pointer" }}
                   onClick={() => handleThemeChange("dark")}
                 >
-                  <div className="d-inline-flex p-3 bg-info bg-opacity-20 text-info rounded-circle mb-2 mx-auto">
-                    <FaMoon className="fs-3 text-info" />
+                  <div className="d-inline-flex p-3 bg-info text-dark rounded-circle mb-2 mx-auto shadow-sm align-items-center justify-content-center" style={{ width: "56px", height: "56px" }}>
+                    <FaMoon className="fs-3 text-dark" />
                   </div>
                   <h6 className="fw-bold mb-1 text-body">🌙 Giao Diện Tối (Dark)</h6>
                   <p className="text-muted small mb-0">Dịu mắt khi theo dõi camera đêm</p>
@@ -93,8 +93,8 @@ function PreferenceSettings() {
                   style={{ cursor: "pointer" }}
                   onClick={() => handleThemeChange("system")}
                 >
-                  <div className="d-inline-flex p-3 bg-success bg-opacity-20 text-success rounded-circle mb-2 mx-auto">
-                    <FaDesktop className="fs-3 text-success" />
+                  <div className="d-inline-flex p-3 bg-success text-white rounded-circle mb-2 mx-auto shadow-sm align-items-center justify-content-center" style={{ width: "56px", height: "56px" }}>
+                    <FaDesktop className="fs-3 text-white" />
                   </div>
                   <h6 className="fw-bold mb-1 text-body">💻 Theo Hệ Thống (Auto OS)</h6>
                   <p className="text-muted small mb-0">Tự động đồng bộ chế độ Windows/Mac</p>

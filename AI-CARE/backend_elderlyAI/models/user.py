@@ -159,13 +159,18 @@ class User(db.Model):
         return check_password_hash(self.password_hash, password)
 
     def to_dict(self):
+        user_role = "Admin" if (self.role or "").upper() == "ADMIN" else "User"
         return {
             "user_id": self.user_id,
+            "id": self.user_id,
+            "patient_id": self.user_id,
             "username": self.username,
             "email": self.email,
             "full_name": self.full_name,
-            "role": self.role,
+            "fullName": self.full_name,
+            "role": user_role,
             "patient_code": self.patient_code,
+            "device_id": self.device_id,
             "phone": self.phone,
             "emergency_contact": self.emergency_contact,
             "created_at": self.created_at.strftime("%Y-%m-%d %H:%M:%S") if self.created_at else None

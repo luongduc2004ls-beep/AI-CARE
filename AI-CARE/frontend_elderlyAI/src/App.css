@@ -186,6 +186,44 @@ header.header-visible {
   color: var(--text-main) !important;
 }
 
+/* Fix badge & alert text contrast in all themes */
+.badge.bg-danger {
+  color: #ffffff !important;
+}
+
+.badge.bg-primary {
+  color: #ffffff !important;
+}
+
+.badge.bg-success {
+  color: #ffffff !important;
+}
+
+.badge.bg-info {
+  color: #0f172a !important;
+}
+
+.badge.bg-warning {
+  color: #0f172a !important;
+}
+
+/* Ensure text inside danger/warning/info/success alerts is always legible */
+[data-bs-theme="dark"] .text-danger, .dark-theme .text-danger {
+  color: #ff6b6b !important;
+}
+
+[data-bs-theme="dark"] .text-success, .dark-theme .text-success {
+  color: #51cf66 !important;
+}
+
+[data-bs-theme="dark"] .text-info, .dark-theme .text-info {
+  color: #38d9a9 !important;
+}
+
+[data-bs-theme="dark"] .text-warning, .dark-theme .text-warning {
+  color: #fcc419 !important;
+}
+
 @media (max-width: 991.98px) {
   .app-main-content {
     min-height: auto;

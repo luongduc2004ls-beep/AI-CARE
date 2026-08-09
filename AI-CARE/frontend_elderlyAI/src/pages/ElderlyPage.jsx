@@ -236,25 +236,40 @@ function ElderlyPage() {
   }[modalMode];
 
   const validPatient = (elderlyPeople || []).find((p) => p && typeof p === "object");
-  const firstPatient = validPatient ? normalizePatient(validPatient) : normalizePatient({
-    patient_id: 1,
-    device_id: "DEV0001",
-    full_name: "Cụ Nguyễn Văn A",
-    age: 72,
-    gender: "Nam",
-    phone: "0912345678",
-    height_cm: 165,
-    weight_kg: 62.5,
-    blood_group: "O+",
-    allergy: "Dị ứng Penicillin & Phấn hoa",
-    address: "Số 15, Ngõ 120 Hoàng Quốc Việt, Cầu Giấy, Hà Nội",
-    medical_history: "Tăng huyết áp nhẹ, Thoái hóa khớp gối",
-    caregiver_name: "Nguyễn Văn B",
-    caregiver_relation: "Con trai",
-    caregiver_age: 42,
-    caregiver_phone: "0987654321",
-    caregiver_email: "nguyenvanb@gmail.com"
-  });
+  const matchedPatient = (elderlyPeople || []).find(
+    (p) =>
+      p &&
+      (p.patient_code === currentUser?.patient_code ||
+        p.patient_id === currentUser?.patient_id ||
+        p.id === currentUser?.user_id ||
+        p.name === currentUser?.full_name ||
+        p.fullName === currentUser?.full_name ||
+        (currentUser?.username && p.patient_code && p.patient_code.toLowerCase().includes(currentUser.username.toLowerCase())))
+  );
+
+  const userPatient = matchedPatient
+    ? normalizePatient(matchedPatient)
+    : validPatient
+    ? normalizePatient(validPatient)
+    : normalizePatient({
+        patient_id: 1,
+        device_id: "DEV0001",
+        full_name: "Cụ Nguyễn Văn A",
+        age: 72,
+        gender: "Nam",
+        phone: "0912345678",
+        height_cm: 165,
+        weight_kg: 62.5,
+        blood_group: "O+",
+        allergy: "Dị ứng Penicillin & Phấn hoa",
+        address: "Số 15, Ngõ 120 Hoàng Quốc Việt, Cầu Giấy, Hà Nội",
+        medical_history: "Tăng huyết áp nhẹ, Thoái hóa khớp gối",
+        caregiver_name: "Nguyễn Văn B",
+        caregiver_relation: "Con trai",
+        caregiver_age: 42,
+        caregiver_phone: "0987654321",
+        caregiver_email: "nguyenvanb@gmail.com"
+      });
 
   return (
     <section className="container-fluid px-3 px-md-4 py-4">
@@ -262,12 +277,12 @@ function ElderlyPage() {
       {!isAdmin ? (
         <>
           {/* BẢNG TRỢ LÝ CHĂM SÓC & SOS KHẨN CẤP */}
-          <FamilyCaregiverPanel patient={firstPatient} />
+          <FamilyCaregiverPanel patient={userPatient} />
 
           {/* THẺ TỔNG QUAN HỒ SƠ Y TẾ NGƯỜI THÂN (THAY THẾ BẢNG ADMIN) */}
           <FamilyMedicalCardView
-            patient={firstPatient}
-            onEdit={(p) => handleEdit(p || firstPatient)}
+            patient={userPatient}
+            onEdit={(p) => handleEdit(p || userPatient)}
           />
         </>
       ) : (
