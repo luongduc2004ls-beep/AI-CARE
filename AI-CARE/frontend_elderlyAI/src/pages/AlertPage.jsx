@@ -55,63 +55,33 @@ function AlertPage() {
   const [error, setError] = useState(null);
 
   // ============================
-  // Tải danh sách thông báo từ API Backend
+  // Tải danh sách thông báo & cảnh báo từ API Backend
   // ============================
   const loadNotifications = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await notificationService.getAll();
+      const endpoint = isAdmin ? "/admin/alerts" : "/my/alerts";
+      const res = await axios.get(`${API_BASE_URL}${endpoint}`, {
+        params: { userId: currentUser?.user_id, userRole: currentUser?.role || "Admin" }
+      });
+      const data = res?.data?.data || [];
       const normalizedData = (data || []).map(normalizeNotification);
       setAlerts(normalizedData);
     } catch (err) {
       console.error("Lỗi khi tải thông báo từ máy chủ:", err);
-      setError("Không thể kết nối đến máy chủ. Đang hiển thị nhật ký cảnh báo từ bộ nhớ tạm.");
+      setError("Không thể kết nối đến máy chủ cơ sở dữ liệu.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isAdmin, currentUser]);
 
   useEffect(() => {
     loadNotifications();
   }, [loadNotifications]);
 
-  // Phân luồng dữ liệu riêng biệt cho Admin vs Người Thân Cá Nhân
-  const scopedAlerts = alerts.filter((alert) => {
-    // Nếu là Quản trị viên (Admin) -> Xem toàn bộ cảnh báo hệ thống
-    if (isAdmin) return true;
-
-    // Nếu là Người Thân Gia Đình -> CHỈ xem cảnh báo của riêng Cụ Nguyễn Văn A (PAT00001)
-    const patientCode = alert.patient_code || "";
-    const titleLower = (alert.title || "").toLowerCase();
-    const contentLower = (alert.content || "").toLowerCase();
-    const locLower = (alert.location || "").toLowerCase();
-
-    // 1. Kiểm tra mã định danh bệnh nhân nếu có
-    if (patientCode && patientCode !== "PAT00001") {
-      return false;
-    }
-
-    // 2. Loại bỏ thông báo thuộc về bệnh nhân khác (Cụ B, Cụ C)
-    if (
-      titleLower.includes("trần thị b") || contentLower.includes("trần thị b") ||
-      titleLower.includes("lê văn c") || contentLower.includes("lê văn c") ||
-      patientCode === "PAT00002" || patientCode === "PAT00003"
-    ) {
-      return false;
-    }
-
-    // 3. Chỉ giữ lại cảnh báo thuộc về người thân cá nhân
-    return (
-      titleLower.includes("nguyễn văn a") ||
-      contentLower.includes("nguyễn văn a") ||
-      locLower.includes("phòng ngủ 101") ||
-      locLower.includes("phòng ăn") ||
-      locLower.includes("phòng khách") ||
-      patientCode === "PAT00001" ||
-      !patientCode
-    );
-  });
+  // Danh sách cảnh báo đã được Backend lọc theo đúng phân quyền Role & UserPatientAccess
+  const scopedAlerts = alerts;
 
   // ============================
   // Handlers cho các thao tác

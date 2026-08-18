@@ -1,33 +1,58 @@
 // ==============================================================================
-// TRANG TRÒ CHUYỆN VỚI TRỢ LÝ AI GOOGLE GEMINI (CHATBOTPAGE.JSX)
+// TRANG TRỢ LÝ AI Y TẾ CHĂM SÓC SỨC KHỎE (CHATBOTPAGE.JSX)
 // ==============================================================================
-// Mô tả: Trang quản lý và trò chuyện với Trợ lý AI Chăm sóc Sức khỏe full màn hình
-//        Hỗ trợ hiển thị Markdown, danh sách chủ đề tư vấn, cài đặt API Key
-//        và quản lý lịch sử trò chuyện chi tiết.
+// Giao diện 3-Pane Medical AI Assistant:
+// [Sidebar Hội thoại] | [Khung Chat AI + Quick Actions] | [Patient Context Panel]
 // ==============================================================================
 
 import React, { useState, useEffect, useRef } from "react";
+import {
+  FaRobot,
+  FaPaperPlane,
+  FaTrashAlt,
+  FaSpinner,
+  FaUserInjured,
+  FaShieldAlt,
+  FaBrain,
+  FaCheckCircle,
+  FaExclamationTriangle,
+  FaHistory,
+  FaInfoCircle
+} from "react-icons/fa";
+import { useAuth } from "../context/AuthContext";
 import { sendChatMessage, clearChatSession, checkChatbotStatus } from "../services/chatbotService";
+import PatientContextPanel from "../components/Chatbot/PatientContextPanel";
+import StructuredAIResponse from "../components/Chatbot/StructuredAIResponse";
+import QuickActionChips from "../components/Chatbot/QuickActionChips";
 
-const ChatbotPage = () => {
-  // ---------------------------------------------------------------------------
-  // Khai báo State quản lý dữ liệu trang
-  // ---------------------------------------------------------------------------
+const SAMPLE_PATIENTS = [
+  { id: "PAT10000", name: "Nguyễn Văn An", age: 71, gender: "Nam", room: "Phòng ngủ 101" },
+  { id: "PAT10001", name: "Trần Thị Bình", age: 68, gender: "Nữ", room: "Phòng khách trung tâm" },
+  { id: "PAT10002", name: "Lê Văn Cường", age: 75, gender: "Nam", room: "Nhà vệ sinh tầng 1" },
+  { id: "PAT10003", name: "Phạm Thị Dung", age: 80, gender: "Nữ", room: "Phòng ngủ 102" },
+];
+
+function ChatbotPage() {
+  const { currentUser } = useAuth();
+  const userRole = currentUser?.role || "Admin";
+
+  const [selectedPatient, setSelectedPatient] = useState(SAMPLE_PATIENTS[0]);
   const [messages, setMessages] = useState([
     {
       id: 1,
       sender: "ai",
-      text: "👋 Xin chào! Tôi là Trợ lý AI Chăm sóc Sức khỏe & Lịch trình Uống thuốc thông minh của hệ thống AI CARE.\n\nBạn có thể hỏi tôi về:\n- 💊 Thông tin và công dụng của các loại thuốc y tế.\n- 🥗 Lịch trình dinh dưỡng và tập luyện cho người cao tuổi.\n- ⏰ Mẹo nhắc nhở uống thuốc đúng giờ.\n- 🩺 Cách theo dõi các chỉ số sức khỏe (Huyết áp, Tim mạch, Đường huyết).",
+      role: "assistant",
+      text: `👋 Xin chào! Tôi là Trợ lý AI Y Tế của hệ thống ElderlyCare AI.\n\nTôi đang theo dõi hồ sơ sức khỏe và dữ liệu camera của **${SAMPLE_PATIENTS[0].name} (${SAMPLE_PATIENTS[0].id})**.\n\nBạn có thể hỏi tôi về:\n- 🩺 **Tình trạng sinh hiệu**: Nhịp tim, Huyết áp, SpO₂ hiện tại.\n- 💊 **Lịch uống thuốc**: Các cữ thuốc hôm nay hoặc kiểm tra ai quên uống.\n- 🚨 **Cảnh báo an toàn**: Đánh giá nguy cơ té ngã và sự cố gần đây.\n- 📹 **Trạng thái camera**: Kiểm tra kết nối các mắt cam trong nhà.`,
       time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     },
   ]);
   const [inputMessage, setInputMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState({ configured: true, model: "gemini-2.5-flash", status_message: "Đang kết nối..." });
+  const [activeTool, setActiveTool] = useState(null);
 
   const messagesEndRef = useRef(null);
 
-  // Khởi tạo và kiểm tra trạng thái API Gemini Backend
   useEffect(() => {
     const fetchStatus = async () => {
       const res = await checkChatbotStatus();
@@ -38,224 +63,226 @@ const ChatbotPage = () => {
     fetchStatus();
   }, []);
 
-  // Tự động cuộn xuống tin nhắn mới nhất
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
 
-  /**
-   * Xử lý gửi tin nhắn tới Gemini API
-   */
-  const handleSend = async (textCustom = null) => {
-    const text = (textCustom || inputMessage).trim();
+  const handleSendMessage = async (customText = null) => {
+    const text = (customText || inputMessage).trim();
     if (!text || loading) return;
 
     const timeStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-
-    const userMessage = {
+    const userMsg = {
       id: Date.now(),
       sender: "user",
+      role: "user",
       text: text,
+      content: text,
       time: timeStr,
     };
 
-    const newMessages = [...messages, userMessage];
-    setMessages(newMessages);
-    if (!textCustom) setInputMessage("");
+    const newMsgs = [...messages, userMsg];
+    setMessages(newMsgs);
+    if (!customText) setInputMessage("");
     setLoading(true);
+    setActiveTool("Đang truy vấn cơ sở dữ liệu hệ thống...");
 
     try {
-      // Định dạng lịch sử cuộc trò chuyện
-      const historyPayload = newMessages.map((m) => ({
+      const historyPayload = newMsgs.map((m) => ({
         role: m.sender === "user" ? "user" : "model",
-        text: m.text,
+        text: m.text || m.content,
       }));
 
-      const res = await sendChatMessage(text, "full_page_session", historyPayload);
+      const res = await sendChatMessage(
+        text,
+        `conv_${selectedPatient.id}`,
+        selectedPatient.id,
+        historyPayload,
+        userRole,
+        currentUser?.user_id || currentUser?.id || 1
+      );
 
-      const aiMessage = {
+      const aiMsg = {
         id: Date.now() + 1,
         sender: "ai",
-        text: res.reply || "🤖 Đã phản hồi từ máy chủ Gemini.",
+        role: "assistant",
+        text: res.reply || "🤖 Đã nhận phản hồi từ hệ thống.",
+        content: res.reply || "🤖 Đã nhận phản hồi từ hệ thống.",
+        structured_data: res.structured_data,
+        tools_called: res.tools_called,
         time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       };
 
-      setMessages((prev) => [...prev, aiMessage]);
+      setMessages((prev) => [...prev, aiMsg]);
     } catch (err) {
-      console.error("Lỗi gửi tin nhắn:", err);
+      console.error("Lỗi chat:", err);
       setMessages((prev) => [
         ...prev,
         {
           id: Date.now() + 1,
           sender: "ai",
-          text: "⚠️ Lỗi kết nối tới Trợ lý AI: " + err.message,
+          role: "assistant",
+          text: `⚠️ Không thể kết nối tới AI Assistant: ${err.message}`,
           time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         },
       ]);
     } finally {
       setLoading(false);
+      setActiveTool(null);
     }
   };
 
-  /**
-   * Xóa lịch sử cuộc trò chuyện
-   */
-  const handleReset = async () => {
-    if (window.confirm("Bạn có chắc chắn muốn làm sạch toàn bộ cuộc trò chuyện?")) {
-      await clearChatSession("full_page_session");
+  const handleClearHistory = async () => {
+    if (window.confirm("Bạn có chắc chắn muốn xóa toàn bộ lịch sử trò chuyện này?")) {
+      await clearChatSession(`conv_${selectedPatient.id}`);
       setMessages([
         {
           id: Date.now(),
           sender: "ai",
-          text: "🧹 Đã xóa toàn bộ hội thoại. Hãy bắt đầu một chủ đề mới!",
+          role: "assistant",
+          text: `Đã làm sạch lịch sử hội thoại cho bệnh nhân **${selectedPatient.name}**. Bạn có thể bắt đầu câu hỏi mới!`,
           time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        },
+        }
       ]);
     }
   };
 
   return (
-    <div className="container-fluid p-4" style={{ backgroundColor: "#f4f6f9", minHeight: "calc(100vh - 70px)" }}>
-      {/* ----------------------------------------------------------------------- */}
-      {/* TIÊU ĐỀ TRANG VÀ THÔNG TIN CẤU HÌNH                                    */}
-      {/* ----------------------------------------------------------------------- */}
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <div>
-          <h3 className="fw-bold text-dark mb-1">🤖 Trợ Lý AI Care Gemini</h3>
-          <p className="text-muted mb-0">Hệ thống hỏi đáp y tế & tư vấn sức khỏe người cao tuổi bằng AI thông minh</p>
-        </div>
-        <div className="d-flex align-items-center gap-2">
-          <span className={`badge p-2 ${status.configured ? "bg-success" : "bg-warning text-dark"}`}>
-            {status.configured ? `✅ AI Ready (${status.model})` : "⚠️ Chưa cấu hình API Key"}
-          </span>
-          <button className="btn btn-outline-danger btn-sm rounded-pill px-3" onClick={handleReset}>
-            🗑️ Xóa Lịch Sử Chat
-          </button>
-        </div>
-      </div>
-
-      {/* ----------------------------------------------------------------------- */}
-      {/* KHUNG NỘI DUNG CUỘC TRÒ CHUYỆN                                          */}
-      {/* ----------------------------------------------------------------------- */}
-      <div className="card border-0 shadow-sm rounded-4 overflow-hidden" style={{ height: "680px", display: "flex", flexDirection: "column" }}>
-        {/* THANH THÔNG BÁO HƯỚNG DẪN */}
-        <div className="bg-primary text-white p-3 d-flex align-items-center justify-content-between">
-          <div className="d-flex align-items-center gap-3">
-            <span style={{ fontSize: "28px" }}>🩺</span>
-            <div>
-              <h6 className="mb-0 fw-bold">AI Care Medical Assistant</h6>
-              <small className="opacity-75">Hỗ trợ 24/7 - Được tối ưu bởi Google Gemini AI &amp; Trợ Lý Y Tế AI CARE</small>
-            </div>
+    <div className="container-fluid p-0" style={{ height: "calc(100vh - 75px)", backgroundColor: "var(--bg-main)" }}>
+      <div className="row g-0 h-100">
+        {/* ========================================================================= */}
+        {/* PANE 1 (LEFT): BỆNH NHÂN ĐANG THEO DÕI & LỊCH SỬ HỘI THOẠI */}
+        {/* ========================================================================= */}
+        <div className="col-12 col-md-3 col-xl-2.5 d-none d-md-flex flex-column h-100 p-3 border-end" style={{ backgroundColor: "var(--bg-card)", borderColor: "var(--border-color)" }}>
+          <div className="d-flex justify-content-between align-items-center mb-3">
+            <span className="extra-small-text text-uppercase fw-bold text-muted">CHỌN BỆNH NHÂN</span>
+            <span className="badge bg-primary bg-opacity-20 text-primary extra-small-text">{SAMPLE_PATIENTS.length} hồ sơ</span>
           </div>
-        </div>
 
-        {/* CỬA SỔ HIỂN THỊ TIN NHẮN */}
-        <div className="card-body p-4 overflow-auto flex-grow-1" style={{ backgroundColor: "#fafbfc" }}>
-          {messages.map((m) => (
-            <div
-              key={m.id}
-              className={`d-flex mb-4 ${m.sender === "user" ? "justify-content-end" : "justify-content-start"}`}
-            >
-              <div className="d-flex gap-3" style={{ maxWidth: "75%" }}>
-                {m.sender === "ai" && (
-                  <div className="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: "40px", height: "40px" }}>
-                    🤖
-                  </div>
-                )}
-                <div>
-                  <div
-                    className={`p-3 rounded-4 shadow-sm ${
-                      m.sender === "user" ? "bg-primary text-white rounded-top-end-0" : "bg-white border text-dark rounded-top-start-0"
-                    }`}
-                    style={{ whiteSpace: "pre-wrap", lineHeight: "1.6", fontSize: "15px" }}
-                  >
-                    {m.text}
-                  </div>
-                  <div className={`small text-muted mt-1 ${m.sender === "user" ? "text-end" : "text-start"}`} style={{ fontSize: "11px" }}>
-                    {m.time}
-                  </div>
+          <div className="d-flex flex-column gap-2 overflow-y-auto flex-grow-1">
+            {SAMPLE_PATIENTS.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                className={`btn text-start p-2.5 rounded-3 d-flex align-items-center gap-2.5 transition-all ${selectedPatient.id === p.id ? "btn-primary" : "btn-dark border border-secondary border-opacity-25"}`}
+                onClick={() => {
+                  setSelectedPatient(p);
+                  setMessages((prev) => [
+                    ...prev,
+                    {
+                      id: Date.now(),
+                      sender: "ai",
+                      role: "assistant",
+                      text: `Đã chuyển ngữ cảnh theo dõi sang bệnh nhân **${p.name} (${p.id})** tại **${p.room}**.`,
+                      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                    }
+                  ]);
+                }}
+              >
+                <div className="p-2 rounded-circle bg-dark text-white">
+                  <FaUserInjured />
                 </div>
-                {m.sender === "user" && (
-                  <div className="bg-secondary text-white rounded-circle d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: "40px", height: "40px" }}>
-                    👤
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
+                <div className="overflow-hidden lh-sm flex-grow-1">
+                  <strong className="body-text d-block text-truncate text-white">{p.name}</strong>
+                  <span className="extra-small-text text-muted">{p.id} · {p.room}</span>
+                </div>
+              </button>
+            ))}
+          </div>
 
-          {loading && (
-            <div className="d-flex align-items-center gap-3 mb-4">
-              <div className="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" style={{ width: "40px", height: "40px" }}>
-                🤖
-              </div>
-              <div className="bg-white border p-3 rounded-4 shadow-sm text-muted">
-                <span className="spinner-border spinner-border-sm me-2 text-primary" role="status"></span>
-                Trợ lý Gemini đang phân tích dữ liệu và trả lời...
-              </div>
+          {/* Engine Status Card at bottom left */}
+          <div className="p-2.5 rounded-3 mt-3 bg-dark border border-secondary border-opacity-25">
+            <div className="d-flex align-items-center gap-2 extra-small-text text-muted">
+              <FaBrain className="text-primary" />
+              <span>Model: <strong className="text-white">{status.model}</strong></span>
             </div>
-          )}
-          <div ref={messagesEndRef} />
+          </div>
         </div>
 
-        {/* CHÂN TRANG NHẬP CÂU HỎI */}
-        <div className="card-footer p-3 bg-white border-top">
-          {/* NÚT GỢI Ý TRA CỨU NHANH */}
-          <div className="d-flex flex-wrap gap-2 mb-3">
-            <span className="small text-muted fw-bold d-flex align-items-center me-1">🔍 Gợi ý tra cứu:</span>
+        {/* ========================================================================= */}
+        {/* PANE 2 (CENTER): KHUNG CHAT AI & THỰC THI TOOLS */}
+        {/* ========================================================================= */}
+        <div className="col-12 col-md-6 col-xl-6.5 d-flex flex-column h-100">
+          {/* Chat Header */}
+          <div className="p-3 px-4 d-flex justify-content-between align-items-center" style={{ backgroundColor: "var(--bg-card-subtle)", borderBottom: "1px solid var(--border-color)" }}>
+            <div className="d-flex align-items-center gap-2.5">
+              <div className="p-2 rounded-3 bg-primary text-white fs-5">
+                <FaRobot />
+              </div>
+              <div>
+                <h2 className="section-title fs-6 mb-0 text-white">Trợ Lý AI Y Tế &amp; Giám Sát Sức Khỏe</h2>
+                <span className="extra-small-text text-muted">
+                  Đang phân tích trực tiếp cho: <strong className="text-primary">{selectedPatient.name}</strong> ({selectedPatient.id})
+                </span>
+              </div>
+            </div>
+
             <button
               type="button"
-              className="btn btn-outline-primary btn-sm rounded-pill px-3"
-              onClick={() => handleSend("Tìm thông tin bệnh nhân PAT10001")}
+              className="btn btn-sm btn-outline-danger rounded-2 d-flex align-items-center gap-1 extra-small-text"
+              onClick={handleClearHistory}
+              title="Xóa lịch sử cuộc trò chuyện"
             >
-              📋 Bệnh nhân PAT10001
-            </button>
-            <button
-              type="button"
-              className="btn btn-outline-primary btn-sm rounded-pill px-3"
-              onClick={() => handleSend("Ai là người nhà của bệnh nhân PAT10001?")}
-            >
-              👨‍👩‍👧 Người nhà PAT10001
-            </button>
-            <button
-              type="button"
-              className="btn btn-outline-primary btn-sm rounded-pill px-3"
-              onClick={() => handleSend("Bác sĩ phụ trách bệnh nhân PAT10001 là ai?")}
-            >
-              👨‍⚕️ Bác sĩ điều trị
-            </button>
-            <button
-              type="button"
-              className="btn btn-outline-primary btn-sm rounded-pill px-3"
-              onClick={() => handleSend("Hướng dẫn sử dụng thuốc Amlodipine 5mg")}
-            >
-              💊 Thuốc Amlodipine
+              <FaTrashAlt /> Xóa hội thoại
             </button>
           </div>
 
-          <div className="input-group">
-            <input
-              type="text"
-              className="form-control form-control-lg border-1 bg-light rounded-pill-start px-4"
-              placeholder="Nhập câu hỏi hoặc yêu cầu tư vấn y tế cho AI Care Gemini..."
-              value={inputMessage}
-              onChange={(e) => setInputMessage(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSend()}
-              disabled={loading}
-            />
-            <button
-              className="btn btn-primary px-4 fw-bold rounded-pill-end d-flex align-items-center gap-2"
-              onClick={() => handleSend()}
-              disabled={loading || !inputMessage.trim()}
-            >
-              <span>Gửi Tin Nhắn</span>
-              <span>➤</span>
-            </button>
+          {/* Messages Feed */}
+          <div className="flex-grow-1 p-4 overflow-y-auto" style={{ backgroundColor: "var(--bg-main)" }}>
+            {messages.map((msg) => (
+              <StructuredAIResponse key={msg.id} message={msg} />
+            ))}
+
+            {loading && (
+              <div className="d-flex align-items-center gap-2 p-3 rounded-4 mb-3" style={{ backgroundColor: "var(--bg-card-subtle)", border: "1px solid var(--border-color)", maxWidth: "80%" }}>
+                <FaSpinner className="spinner-border spinner-border-sm text-primary" />
+                <span className="body-text text-muted">{activeTool || "AI đang phân tích và xử lý câu trả lời..."}</span>
+              </div>
+            )}
+
+            <div ref={messagesEndRef} />
           </div>
+
+          {/* Quick Action Trigger Chips */}
+          <QuickActionChips onSelectAction={(prompt) => handleSendMessage(prompt)} disabled={loading} userRole={userRole} />
+
+          {/* Chat Input Bar */}
+          <div className="p-3" style={{ backgroundColor: "var(--bg-card-subtle)", borderTop: "1px solid var(--border-color)" }}>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSendMessage();
+              }}
+              className="d-flex gap-2 align-items-center"
+            >
+              <input
+                type="text"
+                className="form-control bg-dark text-white border-secondary body-text py-2.5 px-3 rounded-3"
+                placeholder={`Nhập câu hỏi cho trợ lý AI về ${selectedPatient.name}...`}
+                value={inputMessage}
+                onChange={(e) => setInputMessage(e.target.value)}
+                disabled={loading}
+              />
+              <button
+                type="submit"
+                disabled={loading || !inputMessage.trim()}
+                className="btn btn-primary px-4 py-2.5 rounded-3 d-flex align-items-center gap-2 fw-semibold"
+              >
+                <FaPaperPlane /> Gửi
+              </button>
+            </form>
+          </div>
+        </div>
+
+        {/* ========================================================================= */}
+        {/* PANE 3 (RIGHT): PATIENT CONTEXT PANEL (LIVE TELEMETRY) */}
+        {/* ========================================================================= */}
+        <div className="col-12 col-md-3 col-xl-3.5 d-none d-lg-block h-100">
+          <PatientContextPanel patient={selectedPatient} userRole={userRole} />
         </div>
       </div>
     </div>
   );
-};
+}
 
 export default ChatbotPage;

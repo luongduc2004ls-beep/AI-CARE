@@ -6,6 +6,7 @@ import {
   FaPlus,
   FaPlay,
   FaCheckCircle,
+  FaCircle,
   FaSignal,
   FaSync,
   FaDesktop,
@@ -1181,68 +1182,65 @@ const CameraPage = () => {
     const isToiletRisk = (cam.location || "").toLowerCase().includes("vệ sinh") || (cam.location || "").toLowerCase().includes("tắm");
 
     return (
-      <div className="card border-0 shadow-sm rounded-4 overflow-hidden h-100 bg-white border-top border-4 border-primary transition-all hover-shadow">
+      <div className="card h-100 overflow-hidden" style={{ backgroundColor: "var(--bg-card)", borderColor: "var(--border-color)" }}>
         {/* Header bar on tile */}
-        <div className="card-header bg-dark text-white p-2.5 d-flex justify-content-between align-items-center flex-wrap gap-1">
+        <div className="p-2 px-3 d-flex justify-content-between align-items-center" style={{ backgroundColor: "var(--bg-card-subtle)", borderBottom: "1px solid var(--border-color)" }}>
           <div className="d-flex align-items-center gap-2">
-            <span className="badge bg-success text-white extra-small animate-pulse">● LIVE</span>
-            <strong className="small text-truncate" style={{ maxWidth: "210px" }} title={cam.name}>
+            <span className="badge bg-success bg-opacity-20 text-success border border-success border-opacity-30 extra-small-text py-1 px-2 d-flex align-items-center gap-1">
+              <FaCircle style={{ fontSize: "6px" }} /> LIVE
+            </span>
+            <strong className="body-text text-white text-truncate" style={{ maxWidth: "210px" }} title={cam.name}>
               {cam.name}
             </strong>
           </div>
           <div className="d-flex align-items-center gap-1">
             {isToiletRisk && (
-              <span className="badge bg-danger text-white extra-small fw-bold">⚠️ Risk Cao</span>
+              <span className="badge bg-danger text-white extra-small-text fw-bold">⚠️ Risk Cao</span>
             )}
-            <span className="badge bg-secondary font-monospace extra-small">{cam.location}</span>
+            <span className="badge bg-dark text-muted border border-secondary extra-small-text">{cam.location}</span>
           </div>
         </div>
 
         {/* Feed Preview Screen */}
-        <div className="position-relative bg-black d-flex align-items-center justify-content-center overflow-hidden" style={{ minHeight: "220px", maxHeight: "320px" }}>
+        <div className="position-relative bg-black d-flex align-items-center justify-content-center overflow-hidden" style={{ minHeight: "200px", maxHeight: "280px" }}>
           {cam.camera_id === 1 && isWebcamActive ? (
             <div className="position-relative w-100 h-100">
-              <video ref={videoRef} autoPlay playsInline muted className="w-100 h-100 object-fit-cover" style={{ maxHeight: "280px" }} />
+              <video ref={videoRef} autoPlay playsInline muted className="w-100 h-100 object-fit-cover" style={{ maxHeight: "260px" }} />
               <canvas ref={canvasRef} className="position-absolute top-0 start-0 w-100 h-100 pointer-events-none" />
             </div>
           ) : (
             <div
               className="w-100 h-100 d-flex flex-column justify-content-between p-3 position-relative"
               style={{
-                minHeight: "220px",
-                backgroundImage: `radial-gradient(circle, rgba(16, 185, 129, 0.15) 1px, transparent 1px)`,
+                minHeight: "200px",
+                backgroundImage: `radial-gradient(circle, rgba(59, 130, 246, 0.1) 1px, transparent 1px)`,
                 backgroundSize: "18px 18px",
-                backgroundColor: "#0b0f19"
+                backgroundColor: "#0B1120"
               }}
             >
               {/* Overlay Top Telemetry */}
               <div className="d-flex justify-content-between align-items-start z-1">
-                <span className="badge bg-dark bg-opacity-85 text-success border border-success extra-small font-monospace">
-                  RTSP/H.264 • 1080p 60FPS
+                <span className="badge bg-dark text-success border border-success border-opacity-40 extra-small-text font-monospace">
+                  RTSP/H.264 • 1080p
                 </span>
-                <span className="badge bg-primary bg-opacity-85 text-white extra-small">
-                  Độ Nhạy: {cam.sensitivity || "High"}
+                <span className="badge bg-primary bg-opacity-20 text-primary border border-primary border-opacity-30 extra-small-text">
+                  AI ON
                 </span>
               </div>
 
               {/* Center Status Badge */}
               <div className="text-center my-3 z-1">
-                <div className="d-inline-block p-3 rounded-3 bg-dark bg-opacity-75 border border-success border-opacity-40">
-                  <small className="text-success d-block mb-1 font-monospace fw-bold">
-                    [AI BASELINE POSE MEMORY ONLINE]
-                  </small>
-                  <div className="d-flex justify-content-center gap-2 text-white-50 extra-small">
-                    <span>Góc nghiêng: 12°</span>
-                    <span>•</span>
-                    <span>Chờ xác minh: {anomalyTimeoutConfig}s</span>
-                  </div>
+                <div className="d-inline-block p-2 px-3 rounded-3" style={{ backgroundColor: "rgba(17, 24, 39, 0.85)", border: "1px solid var(--border-color)" }}>
+                  <span className="badge bg-success bg-opacity-20 text-success extra-small-text fw-semibold d-inline-flex align-items-center gap-1">
+                    <FaCheckCircle /> ✓ Bình thường
+                  </span>
                 </div>
               </div>
 
               {/* Overlay Bottom Patient Tag */}
-              <div className="d-flex justify-content-between align-items-end text-white-50 extra-small font-monospace z-1">
+              <div className="d-flex justify-content-between align-items-end extra-small-text font-monospace z-1">
                 <span className="text-info fw-bold">👤 {cam.patient_id} • {cam.patient_name}</span>
-                <span className="text-success">STATUS: OK</span>
+                <span className="text-success fw-semibold">ONLINE</span>
               </div>
             </div>
           )}
@@ -1250,14 +1248,14 @@ const CameraPage = () => {
           {/* Action Hover Controls Bar */}
           <div className="position-absolute top-0 end-0 m-2 d-flex gap-1 z-2">
             <button
-              className="btn btn-xs btn-dark bg-opacity-75 text-white border-0 rounded-circle p-1.5"
-              title="Phóng to luồng camera này"
+              className="btn btn-sm btn-dark bg-opacity-75 text-white border-0 rounded-circle p-1.5"
+              title="Xem trực tiếp & Chi tiết AI"
               onClick={() => setMaximizedCamera(cam)}
             >
               <FaExpand className="fs-6" />
             </button>
             <button
-              className={`btn btn-xs ${isMuted ? "btn-secondary" : "btn-dark"} bg-opacity-75 text-white border-0 rounded-circle p-1.5`}
+              className={`btn btn-sm ${isMuted ? "btn-secondary" : "btn-dark"} bg-opacity-75 text-white border-0 rounded-circle p-1.5`}
               title={isMuted ? "Mở âm thanh" : "Tắt âm thanh"}
               onClick={() => toggleAudioMute(cam.camera_id)}
             >
@@ -1267,27 +1265,18 @@ const CameraPage = () => {
         </div>
 
         {/* Tile Bottom Action Bar */}
-        <div className="card-footer bg-light p-2.5 d-flex justify-content-between align-items-center flex-wrap gap-2">
-          <div className="small text-muted font-monospace d-flex align-items-center gap-1">
+        <div className="p-2.5 px-3 d-flex justify-content-between align-items-center flex-wrap gap-2" style={{ backgroundColor: "var(--bg-card-subtle)", borderTop: "1px solid var(--border-color)" }}>
+          <div className="extra-small-text text-muted font-monospace d-flex align-items-center gap-1">
             <FaShieldAlt className="text-success" />
-            <span className="extra-small text-dark fw-semibold">{cam.caregiver_name} ({cam.caregiver_phone})</span>
+            <span className="text-white fw-semibold">{cam.caregiver_name} ({cam.caregiver_phone})</span>
           </div>
 
-          <div className="d-flex gap-1 flex-wrap">
+          <div className="d-flex gap-2 align-items-center">
             <button
-              className="btn btn-xs btn-outline-warning text-dark fw-bold rounded-pill px-2.5 py-1"
-              title="Phát báo cáo bất thường tới Admin"
-              onClick={() => handleSendDirectAnomalyToAdmin(cam)}
+              className="btn btn-sm btn-outline-primary rounded-2 extra-small-text fw-semibold py-1 px-2"
+              onClick={() => setMaximizedCamera(cam)}
             >
-              <FaWifi className="me-1" /> Báo Admin
-            </button>
-
-            <button
-              className="btn btn-xs btn-danger text-white fw-bold rounded-pill px-2.5 py-1"
-              disabled={testingCamId === cam.camera_id}
-              onClick={() => handleTriggerFallAlert(cam.camera_id, cam.name, cam.location)}
-            >
-              <FaPlay className="me-1" /> {testingCamId === cam.camera_id ? "..." : "🚨 Thử Ngã"}
+              Xem trực tiếp →
             </button>
           </div>
         </div>

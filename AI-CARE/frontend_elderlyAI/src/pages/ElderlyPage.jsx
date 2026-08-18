@@ -182,35 +182,27 @@ function ElderlyPage() {
       };
 
       if (modalMode === "edit" && selectedPerson) {
-        const targetId = selectedPerson.patient_id || selectedPerson.id || 1;
-        try {
-          await patientService.update(targetId, payload);
-        } catch (e) {
-          console.warn("Lưu cục bộ frontend thành công:", e);
-        }
-        alert("Cập nhật hồ sơ y tế người thân thành công!");
+        const targetId = selectedPerson.patient_code || selectedPerson.patient_id || selectedPerson.id;
+        await patientService.update(targetId, payload);
+        alert("Cập nhật hồ sơ y tế bệnh nhân thành công!");
       } else {
-        try {
-          await patientService.create(payload);
-        } catch (e) {
-          console.warn("Lưu cục bộ frontend thành công:", e);
-        }
-        alert("Thêm mới hồ sơ người thân thành công!");
+        await patientService.create(payload);
+        alert("Thêm mới hồ sơ bệnh nhân thành công!");
       }
 
       handleCloseModal();
       await loadData();
     } catch (err) {
-      console.error("Lỗi khi lưu thông tin người cao tuổi:", err);
-      alert("Cập nhật hồ sơ thành công!");
-      handleCloseModal();
+      console.error("Lỗi khi lưu thông tin người cao tuổi vào cơ sở dữ liệu:", err);
+      const errMsg = err.response?.data?.message || err.message || "Không thể lưu dữ liệu vào cơ sở dữ liệu.";
+      alert(`⚠️ Lỗi: ${errMsg}`);
     } finally {
       setLoading(false);
     }
   };
 
   const handleDelete = async (id) => {
-    const personToDelete = elderlyPeople.find((person) => (person.patient_id || person.id) === id);
+    const personToDelete = elderlyPeople.find((person) => (person.patient_id || person.patient_code || person.id) === id);
     const personName = personToDelete?.fullName || personToDelete?.full_name || "người này";
 
     const confirmDelete = window.confirm(`Bạn có chắc chắn muốn xóa hồ sơ của ${personName}?`);
@@ -223,7 +215,8 @@ function ElderlyPage() {
       await loadData();
     } catch (err) {
       console.error("Lỗi khi xóa hồ sơ:", err);
-      alert("Đã hoàn tất thao tác xóa.");
+      const errMsg = err.response?.data?.message || err.message || "Không thể xóa hồ sơ khỏi cơ sở dữ liệu.";
+      alert(`⚠️ Lỗi: ${errMsg}`);
     } finally {
       setLoading(false);
     }
@@ -336,7 +329,7 @@ function ElderlyPage() {
       <ElderlyModal show={showModal} onHide={handleCloseModal} title={modalTitle}>
         <ElderlyForm
           key={modalMode === "add" ? "new_patient_form" : (selectedPerson?.id || selectedPerson?.patient_id || "edit_form")}
-          initialData={modalMode === "add" ? null : (selectedPerson || firstPatient)}
+          initialData={modalMode === "add" ? null : (selectedPerson || validPatient || null)}
           onSubmit={handleSave}
           onCancel={handleCloseModal}
           readOnly={modalMode === "view"}

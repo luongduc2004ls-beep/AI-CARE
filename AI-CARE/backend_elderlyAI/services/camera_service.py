@@ -1,337 +1,267 @@
-import os
-import random
+"""
+Camera Service & Hardware Binding Layer
+Connects Camera Entities directly with Patients, Locations, and Stream Metadata.
+"""
 from datetime import datetime
 from database import db
 from models.camera import Camera
-from models.fall_history import FallHistory
-from models.notification import Notification
 from models.user import User
+from models.alert import Alert
+from services.auth_permission_service import AuthPermissionService
 
-# Fallback in-memory camera list if DB is offline or empty
-INITIAL_CAMERAS = [
+DEFAULT_SEEDED_CAMERAS = [
     {
-        "camera_id": 1,
+        "camera_code": "CAM001",
         "patient_id": "PAT10000",
-        "patient_name": "Hồ Thanh Khánh",
-        "age": 71,
-        "gender": "Nam",
-        "device_id": "D1000",
-        "name": "Camera Ezviz AI - Phòng Ngủ 101 Cụ Hồ Thanh Khánh",
+        "name": "Camera Ezviz AI - Phòng Ngủ 101",
         "rtsp_url": "rtsp://192.168.1.101:554/stream1",
         "location": "Phòng Ngủ 101",
+        "room": "Phòng Ngủ",
         "status": "ONLINE",
         "ai_enabled": True,
-        "sensitivity": "High",
-        "caregiver_name": "Phan Thị An (Con gái)",
-        "caregiver_phone": "0851745822"
+        "sensitivity": "High"
     },
     {
-        "camera_id": 2,
-        "patient_id": "PAT10001",
-        "patient_name": "Phan Anh Thảo",
-        "age": 74,
-        "gender": "Nữ",
-        "device_id": "D1001",
-        "name": "Camera Imou AI - Phòng Khách Cụ Phan Anh Thảo",
-        "rtsp_url": "rtsp://192.168.1.102:554/stream1",
-        "location": "Phòng Khách Trung Tâm",
-        "status": "ONLINE",
-        "ai_enabled": True,
-        "sensitivity": "Medium",
-        "caregiver_name": "Lê Thanh Chi (Vợ)",
-        "caregiver_phone": "0394652227"
-    },
-    {
-        "camera_id": 3,
-        "patient_id": "PAT10002",
-        "patient_name": "Đỗ Thanh Phong",
-        "age": 68,
-        "gender": "Nam",
-        "device_id": "D1002",
-        "name": "Camera AI - Nhà Vệ Sinh Cụ Đỗ Thanh Phong",
-        "rtsp_url": "rtsp://192.168.1.103:554/stream1",
-        "location": "Nhà Vệ Sinh Tầng 1",
-        "status": "ONLINE",
-        "ai_enabled": True,
-        "sensitivity": "High",
-        "caregiver_name": "Đặng Quốc An (Con trai)",
-        "caregiver_phone": "0960768603"
-    },
-    {
-        "camera_id": 4,
-        "patient_id": "PAT10003",
-        "patient_name": "Phan Ngọc Ngọc",
-        "age": 73,
-        "gender": "Nam",
-        "device_id": "D1003",
-        "name": "Camera Tapo AI - Hành Lang Cụ Phan Ngọc Ngọc",
-        "rtsp_url": "rtsp://192.168.1.104:554/stream1",
-        "location": "Hành Lang Tầng 2",
-        "status": "ONLINE",
-        "ai_enabled": True,
-        "sensitivity": "Medium",
-        "caregiver_name": "Phan Minh Bình (Con trai)",
-        "caregiver_phone": "0952394419"
-    },
-    {
-        "camera_id": 5,
+        "camera_code": "CAM002",
         "patient_id": "PAT10000",
-        "patient_name": "Hồ Thanh Khánh",
-        "age": 71,
-        "gender": "Nam",
-        "device_id": "D1004",
-        "name": "Camera AI - Nhà Vệ Sinh 101 Cụ Hồ Thanh Khánh",
-        "rtsp_url": "rtsp://192.168.1.105:554/stream1",
+        "name": "Camera Imou AI - Phòng Khách 101",
+        "rtsp_url": "rtsp://192.168.1.102:554/stream1",
+        "location": "Phòng Khách 101",
+        "room": "Phòng Khách",
+        "status": "ONLINE",
+        "ai_enabled": True,
+        "sensitivity": "Medium"
+    },
+    {
+        "camera_code": "CAM003",
+        "patient_id": "PAT10000",
+        "name": "Camera AI - Nhà Vệ Sinh 101",
+        "rtsp_url": "rtsp://192.168.1.103:554/stream1",
         "location": "Nhà Vệ Sinh 101",
+        "room": "Nhà Vệ Sinh",
         "status": "ONLINE",
         "ai_enabled": True,
-        "sensitivity": "High",
-        "caregiver_name": "Phan Thị An (Con gái)",
-        "caregiver_phone": "0851745822"
+        "sensitivity": "High"
     },
     {
-        "camera_id": 6,
+        "camera_code": "CAM004",
         "patient_id": "PAT10001",
-        "patient_name": "Phan Anh Thảo",
-        "age": 74,
-        "gender": "Nữ",
-        "device_id": "D1005",
-        "name": "Camera Tapo AI - Phòng Ngủ Cụ Phan Anh Thảo",
-        "rtsp_url": "rtsp://192.168.1.106:554/stream1",
-        "location": "Phòng Ngủ 201",
+        "name": "Camera Tapo AI - Phòng Ngủ Phan Anh Thảo",
+        "rtsp_url": "rtsp://192.168.1.104:554/stream1",
+        "location": "Phòng Ngủ Trung Tâm",
+        "room": "Phòng Ngủ",
         "status": "ONLINE",
         "ai_enabled": True,
-        "sensitivity": "Medium",
-        "caregiver_name": "Lê Thanh Chi (Vợ)",
-        "caregiver_phone": "0394652227"
+        "sensitivity": "Medium"
     },
     {
-        "camera_id": 7,
+        "camera_code": "CAM005",
+        "patient_id": "PAT10001",
+        "name": "Camera Imou AI - Phòng Khách Phan Anh Thảo",
+        "rtsp_url": "rtsp://192.168.1.105:554/stream1",
+        "location": "Phòng Khách Trung Tâm",
+        "room": "Phòng Khách",
+        "status": "ONLINE",
+        "ai_enabled": True,
+        "sensitivity": "Medium"
+    },
+    {
+        "camera_code": "CAM006",
         "patient_id": "PAT10002",
-        "patient_name": "Đỗ Thanh Phong",
-        "age": 68,
-        "gender": "Nam",
-        "device_id": "D1006",
-        "name": "Camera Ezviz AI - Phòng Ngủ Cụ Đỗ Thanh Phong",
-        "rtsp_url": "rtsp://192.168.1.107:554/stream1",
-        "location": "Phòng Ngủ 102",
+        "name": "Camera AI - Nhà Vệ Sinh Đỗ Thanh Phong",
+        "rtsp_url": "rtsp://192.168.1.106:554/stream1",
+        "location": "Nhà Vệ Sinh Tầng 1",
+        "room": "Nhà Vệ Sinh",
         "status": "ONLINE",
         "ai_enabled": True,
-        "sensitivity": "Medium",
-        "caregiver_name": "Đặng Quốc An (Con trai)",
-        "caregiver_phone": "0960768603"
+        "sensitivity": "High"
     },
     {
-        "camera_id": 8,
+        "camera_code": "CAM007",
         "patient_id": "PAT10003",
-        "patient_name": "Phan Ngọc Ngọc",
-        "age": 73,
-        "gender": "Nam",
-        "device_id": "D1007",
-        "name": "Camera Yoosee AI - Phòng Ăn Cụ Phan Ngọc Ngọc",
-        "rtsp_url": "rtsp://192.168.1.108:554/stream1",
-        "location": "Phòng Bếp & Nhà Ăn",
+        "name": "Camera Tapo AI - Hành Lang Tầng 2",
+        "rtsp_url": "rtsp://192.168.1.107:554/stream1",
+        "location": "Hành Lang Tầng 2",
+        "room": "Hành Lang",
         "status": "ONLINE",
         "ai_enabled": True,
-        "sensitivity": "Medium",
-        "caregiver_name": "Phan Minh Bình (Con trai)",
-        "caregiver_phone": "0952394419"
+        "sensitivity": "Medium"
+    },
+    {
+        "camera_code": "CAM008",
+        "patient_id": "PAT10000",
+        "name": "Camera Ezviz AI - Hành Lang 101",
+        "rtsp_url": "rtsp://192.168.1.108:554/stream1",
+        "location": "Hành Lang 101",
+        "room": "Hành Lang",
+        "status": "ONLINE",
+        "ai_enabled": True,
+        "sensitivity": "Medium"
     }
 ]
 
-# In-memory active alerts cache
-ACTIVE_FALL_ALERTS = []
-
-
-def seed_default_cameras_if_empty():
-    """Khởi tạo dữ liệu camera mặc định trong DB nếu chưa có"""
+def seed_cameras_if_empty():
     try:
-        if db.session:
-            # Tạo bảng nếu chưa tồn tại trong db context
-            db.create_all()
-            count = Camera.query.count()
-            if count == 0:
-                for cam_data in INITIAL_CAMERAS:
-                    cam = Camera(
-                        name=cam_data["name"],
-                        rtsp_url=cam_data["rtsp_url"],
-                        location=cam_data["location"],
-                        status=cam_data["status"],
-                        ai_enabled=cam_data["ai_enabled"],
-                        sensitivity=cam_data["sensitivity"]
-                    )
-                    db.session.add(cam)
-                db.session.commit()
-    except Exception as e:
-        if db.session:
-            db.session.rollback()
-        # Fallback im-memory
-        pass
-
-
-
-def get_all_cameras():
-    """Lấy danh sách tất cả các camera kết nối"""
-    try:
-        seed_default_cameras_if_empty()
-        cams = Camera.query.all()
-        if cams:
-            return [cam.to_dict() for cam in cams]
+        count = Camera.query.count()
+        if count == 0:
+            for item in DEFAULT_SEEDED_CAMERAS:
+                c = Camera(
+                    camera_code=item["camera_code"],
+                    patient_id=item["patient_id"],
+                    name=item["name"],
+                    rtsp_url=item["rtsp_url"],
+                    location=item["location"],
+                    room=item.get("room", item["location"]),
+                    status=item.get("status", "ONLINE"),
+                    ai_enabled=item.get("ai_enabled", True),
+                    sensitivity=item.get("sensitivity", "High"),
+                    last_seen_at=datetime.utcnow()
+                )
+                db.session.add(c)
+            db.session.commit()
     except Exception:
-        pass
+        db.session.rollback()
 
-    return INITIAL_CAMERAS
+
+def get_all_cameras(user_role="Admin", user_id=None):
+    """
+    Lấy danh sách Camera từ CSDL với phân quyền Role & Patient Scope.
+    """
+    seed_cameras_if_empty()
+    query = Camera.query
+
+    if (user_role or "").upper() != "ADMIN":
+        allowed_ids = AuthPermissionService.get_authorized_patient_ids(user_id, user_role)
+        query = query.filter(Camera.patient_id.in_(allowed_ids))
+
+    cams = query.order_by(Camera.camera_id.asc()).all()
+    results = []
+    for c in cams:
+        d = c.to_dict()
+        # Gắn thêm thông tin bệnh nhân từ bảng Users
+        u = User.query.filter_by(patient_code=c.patient_id).first()
+        d["patient_name"] = u.full_name if u else "Bệnh nhân cao tuổi"
+        d["age"] = u.age if u else 70
+        d["gender"] = u.gender if u else "Nam"
+        d["caregiver_name"] = u.caregiver_name if u else "Người thân"
+        d["caregiver_phone"] = u.caregiver_phone if u else "0987654321"
+        results.append(d)
+
+    return results
 
 
 def add_new_camera(data):
-    """Đăng ký camera RTSP mới"""
-    name = data.get("name")
-    rtsp_url = data.get("rtsp_url")
-    location = data.get("location", "Khu vực chung")
-    sensitivity = data.get("sensitivity", "Medium")
-
-    if not name or not rtsp_url:
-        return {"success": False, "message": "Tên camera và RTSP URL là bắt buộc"}, 400
-
+    """
+    Thêm camera mới gắn trực tiếp vào bệnh nhân.
+    """
     try:
-        cam = Camera(
+        name = data.get("name") or data.get("camera_name") or "Camera AI Mới"
+        rtsp_url = data.get("rtsp_url") or "rtsp://192.168.1.100:554/stream1"
+        patient_id = data.get("patient_id") or "PAT10000"
+        location = data.get("location") or "Phòng Ngủ"
+        room = data.get("room") or location
+
+        count = Camera.query.count()
+        camera_code = data.get("camera_code") or f"CAM{count + 1:03d}"
+
+        c = Camera(
+            camera_code=camera_code,
+            patient_id=patient_id,
             name=name,
             rtsp_url=rtsp_url,
             location=location,
-            status="ONLINE",
-            ai_enabled=True,
-            sensitivity=sensitivity
+            room=room,
+            status=data.get("status", "ONLINE"),
+            ai_enabled=bool(data.get("ai_enabled", True)),
+            sensitivity=data.get("sensitivity", "High"),
+            last_seen_at=datetime.utcnow()
         )
-        db.session.add(cam)
+        db.session.add(c)
         db.session.commit()
-        return {"success": True, "data": cam.to_dict(), "message": "Thêm camera thành công"}, 201
+        return {"success": True, "data": c.to_dict(), "message": "Đã thêm camera mới thành công."}, 201
     except Exception as e:
-        if db.session:
-            db.session.rollback()
-        # Fallback to in-memory
-        new_id = len(INITIAL_CAMERAS) + 1
-        new_cam = {
-            "camera_id": new_id,
-            "name": name,
-            "rtsp_url": rtsp_url,
-            "location": location,
-            "status": "ONLINE",
-            "ai_enabled": True,
-            "sensitivity": sensitivity,
-            "created_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-        }
-        INITIAL_CAMERAS.append(new_cam)
-        return {"success": True, "data": new_cam, "message": "Thêm camera thành công (In-memory)"}, 201
+        db.session.rollback()
+        return {"success": False, "error": str(e)}, 400
+
+
+def update_camera(camera_id, data):
+    """
+    Cập nhật thông tin camera trong CSDL.
+    """
+    c = db.session.get(Camera, camera_id)
+    if not c:
+        return None
+
+    if "name" in data or "camera_name" in data:
+        c.name = data.get("name") or data.get("camera_name")
+    if "rtsp_url" in data:
+        c.rtsp_url = data.get("rtsp_url")
+    if "patient_id" in data:
+        c.patient_id = data.get("patient_id")
+    if "location" in data:
+        c.location = data.get("location")
+    if "room" in data:
+        c.room = data.get("room")
+    if "status" in data:
+        c.status = data.get("status")
+    if "ai_enabled" in data:
+        c.ai_enabled = bool(data.get("ai_enabled"))
+    if "sensitivity" in data:
+        c.sensitivity = data.get("sensitivity")
+
+    c.updated_at = datetime.utcnow()
+    c.last_seen_at = datetime.utcnow()
+    db.session.commit()
+    return c.to_dict()
+
+
+def delete_camera(camera_id):
+    """
+    Xóa camera khỏi CSDL.
+    """
+    c = db.session.get(Camera, camera_id)
+    if not c:
+        return False
+    db.session.delete(c)
+    db.session.commit()
+    return True
 
 
 def trigger_fall_simulation(camera_id, snapshot_url=None):
     """
-    Giả lập / Thực thi phân tích AI phát hiện ngã từ Camera
-    Tính toán chỉ số Pose AI:
-    - Spine Angle: 78.5 degrees (> 60° -> Ngã)
-    - Aspect Ratio (Height/Width): 0.42 (< 0.8 -> Nằm ngang sàn)
-    - Downward Acceleration: 9.8 m/s^2 (Gia tốc rơi nhanh)
-    - Post-fall Motionless Time: 4.2 seconds
+    Kích hoạt phát hiện ngã mẫu từ Camera và tạo bản ghi Alert trong CSDL.
     """
-    # Tìm camera
-    camera = None
-    all_cams = get_all_cameras()
-    for c in all_cams:
-        if str(c["camera_id"]) == str(camera_id):
-            camera = c
-            break
+    c = db.session.get(Camera, camera_id)
+    p_id = c.patient_id if c else "PAT10000"
+    loc = c.location if c else "Phòng Ngủ 101"
 
-    if not camera:
-        camera = INITIAL_CAMERAS[0]
-
-    location = camera.get("location", "Phòng Ngủ")
-    camera_name = camera.get("name", "Camera AI Giám Sát")
-    now_str = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-
-    # Lấy thông tin bệnh nhân/người già nếu có
-    patient_name = "Cụ Nguyễn Văn A (82 tuổi)"
-    user_id = 1
-    try:
-        user = User.query.filter_by(role="Patient").first()
-        if user:
-            patient_name = f"{user.full_name}"
-            user_id = user.user_id
-    except Exception:
-        pass
-
-    # Tạo bản ghi FallHistory & Notification trong DB nếu sẵn sàng
-    fall_id = random.randint(1000, 9999)
-    try:
-        fall_rec = FallHistory(
-            user_id=user_id,
-            location=location,
-            severity="KHẨN CẤP",
-            image="fall_snapshot_live.jpg",
-            fall_time=datetime.utcnow()
-        )
-        db.session.add(fall_rec)
-
-        notif = Notification(
-            user_id=user_id,
-            title=f"🚨 CẢNH BÁO NGUY CẤP: Phát hiện ngã tại {location}!",
-            content=f"Camera [{camera_name}] phát hiện {patient_name} bị ngã xuống sàn vào lúc {now_str}. Tỷ lệ tư thế nằm ngang 0.42, góc xương sống 78.5°. Cần hỗ trợ ngay lập tức!",
-            is_read=False,
-            created_at=datetime.utcnow()
-        )
-        db.session.add(notif)
-        db.session.commit()
-        fall_id = fall_rec.fall_id
-    except Exception as e:
-        if db.session:
-            db.session.rollback()
-        print(f"[CameraService] DB recording fallback: {e}")
-
-    # Cấu trúc đối tượng alert gửi về Client
-    alert_event = {
-        "alert_id": fall_id,
-        "camera_id": camera["camera_id"],
-        "camera_name": camera_name,
-        "location": location,
-        "patient_name": patient_name,
-        "detected_at": now_str,
-        "severity": "KHẨN CẤP",
-        "status": "PENDING",  # PENDING, ACKNOWLEDGED, FALSE_ALARM
-        "ai_analytics": {
-            "model_version": "YOLOv11-Pose-STGCN v2.4",
-            "confidence": 0.968,
-            "spine_angle_deg": 78.5,
-            "aspect_ratio": 0.42,
-            "vertical_velocity_m_s": 3.85,
-            "motionless_duration_sec": 4.2
-        },
-        "snapshot_url": snapshot_url or "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22800%22%20height%3D%22500%22%3E%3Crect%20width%3D%22800%22%20height%3D%22500%22%20fill%3D%22%230f172a%22%2F%3E%3Ctext%20x%3D%22400%22%20y%3D%22250%22%20fill%3D%22%23ef4444%22%20font-family%3D%22sans-serif%22%20font-size%3D%2220%22%20text-anchor%3D%22middle%22%3E%F0%9F%9A%A8%20LIVE%20SNAPSHOT%20CAPTURED%20ON%20ANOMALY%3C%2Ftext%3E%3C%2Fsvg%3E"
-    }
-
-    ACTIVE_FALL_ALERTS.insert(0, alert_event)
-
-    return {
-        "success": True,
-        "message": f"🚨 ĐÃ KÍCH HOẠT CẢNH BÁO NGÃ TỪ {camera_name}!",
-        "alert": alert_event
-    }
+    alert = Alert(
+        patient_id=p_id,
+        camera_id=camera_id,
+        alert_type="FALL",
+        title=f"CẢNH BÁO TÉ NGÃ — {loc.upper()}",
+        severity="CRITICAL",
+        confidence=0.94,
+        status="ALERTED",
+        location=loc,
+        spine_angle=78.5,
+        duration_seconds=14,
+        snapshot_url=snapshot_url,
+        alert_created_at=datetime.utcnow()
+    )
+    db.session.add(alert)
+    db.session.commit()
+    return {"success": True, "alert": alert.to_dict()}
 
 
 def get_active_alerts():
-    """Lấy danh sách các cảnh báo ngã đang mở"""
-    return ACTIVE_FALL_ALERTS
+    """Hàm tương thích lấy danh sách cảnh báo từ AlertService"""
+    from services.alert_service import AlertService
+    return AlertService.get_alerts(user_role="Admin")
 
 
 def acknowledge_alert(alert_id, status_code="ACKNOWLEDGED"):
-    """Xác nhận xử lý cảnh báo ngã"""
-    global ACTIVE_FALL_ALERTS
-    for alert in ACTIVE_FALL_ALERTS:
-        if str(alert["alert_id"]) == str(alert_id):
-            alert["status"] = status_code
-            alert["acknowledged_at"] = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-            return {
-                "success": True,
-                "message": f"Đã cập nhật trạng thái cảnh báo thành: {status_code}",
-                "alert": alert
-            }
+    """Hàm tương thích xác nhận cảnh báo từ AlertService"""
+    from services.alert_service import AlertService
+    return AlertService.acknowledge_alert(alert_id)
 
-    return {"success": True, "message": "Đã ghi nhận phản hồi cảnh báo"}, 200

@@ -1,43 +1,56 @@
-/* Design Tokens & Theme Variable System */
-:root, [data-bs-theme="light"], .light-theme {
-  font-family: "Segoe UI", Roboto, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+/* Design Tokens & Theme Variable System - Enterprise Medical AI Dashboard */
+
+/* 1. Light Mode (Default & Explicit) */
+:root,
+[data-bs-theme="light"],
+.light-theme {
+  --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   
-  /* Light Theme Colors */
-  --bg-main: #f4f7fb;
-  --bg-card: #ffffff;
-  --bg-card-subtle: #f8fafc;
-  --bg-header: #ffffff;
-  --bg-header-glass: rgba(255, 255, 255, 0.88);
-  --bg-sidebar-gradient: linear-gradient(180deg, #1e3a8a 0%, #1d4ed8 100%);
-  --sidebar-active-bg: rgba(255, 255, 255, 0.2);
+  /* Primary Healthcare Light Palette */
+  --bg-main: #F8FAFC;
+  --bg-card: #FFFFFF;
+  --bg-card-subtle: #F1F5F9;
+  --bg-header: #FFFFFF;
+  --bg-header-glass: rgba(255, 255, 255, 0.95);
+  --bg-sidebar: #FFFFFF;
+  --border-color: #E2E8F0;
+  --border-subtle: #F1F5F9;
 
-  --text-main: #1e293b;
-  --text-heading: #0f172a;
-  --text-muted: #64748b;
-  --text-subtle: #94a3b8;
+  /* Status & Action Colors */
+  --color-primary: #2563EB;
+  --color-success: #16A34A;
+  --color-warning: #D97706;
+  --color-danger: #DC2626;
+  --color-offline: #64748B;
 
-  --border-color: #e2e8f0;
-  --border-subtle: #f1f5f9;
+  /* Typography Colors */
+  --text-main: #0F172A;
+  --text-heading: #0F172A;
+  --text-muted: #64748B;
+  --text-subtle: #94A3B8;
 
-  --input-bg: #ffffff;
-  --input-border: #cbd5e1;
-  --input-focus-border: #3b82f6;
+  /* Form & Interactive Elements */
+  --input-bg: #FFFFFF;
+  --input-border: #CBD5E1;
+  --input-focus-border: #2563EB;
 
-  --card-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
-  --card-shadow-hover: 0 12px 24px -4px rgba(15, 23, 42, 0.12);
+  /* Card Shadow System */
+  --card-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.06);
+  --card-shadow-hover: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
 
-  --table-header-bg: #f8fafc;
-  --table-hover-bg: #eef5ff;
-  --dropdown-bg: #ffffff;
+  /* Table Colors */
+  --table-header-bg: #F8FAFC;
+  --table-hover-bg: #F1F5F9;
 
-  --summary-primary-bg: #eef5ff;
-  --summary-primary-border: #cfe2ff;
-  --summary-success-bg: #edf9f1;
-  --summary-success-border: #c9ead5;
-  --summary-warning-bg: #fff8e6;
-  --summary-warning-border: #ffe69c;
-  --summary-danger-bg: #fff0f1;
-  --summary-danger-border: #f5c2c7;
+  /* Status Fill Overlays */
+  --summary-primary-bg: rgba(37, 99, 235, 0.08);
+  --summary-primary-border: rgba(37, 99, 235, 0.2);
+  --summary-success-bg: rgba(22, 163, 74, 0.08);
+  --summary-success-border: rgba(22, 163, 74, 0.2);
+  --summary-warning-bg: rgba(217, 119, 6, 0.08);
+  --summary-warning-border: rgba(217, 119, 6, 0.2);
+  --summary-danger-bg: rgba(220, 38, 38, 0.08);
+  --summary-danger-border: rgba(220, 38, 38, 0.2);
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -45,43 +58,54 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
-[data-bs-theme="dark"], .dark-theme {
-  /* Dark Theme Colors */
-  --bg-main: #0b0f19;
-  --bg-card: #131b2e;
-  --bg-card-subtle: #19233c;
-  --bg-header: #0f172a;
-  --bg-header-glass: rgba(15, 23, 42, 0.85);
-  --bg-sidebar-gradient: linear-gradient(180deg, #0b0f19 0%, #131b2e 100%);
-  --sidebar-active-bg: rgba(59, 130, 246, 0.25);
+/* 2. Dark Mode */
+[data-bs-theme="dark"],
+.dark-theme {
+  /* Primary Enterprise Dark Palette */
+  --bg-main: #0B1120;
+  --bg-card: #111827;
+  --bg-card-subtle: #1F2937;
+  --bg-header: #0B1120;
+  --bg-header-glass: rgba(11, 17, 32, 0.92);
+  --bg-sidebar: #0B1120;
+  --border-color: #243044;
+  --border-subtle: #1F2937;
 
-  --text-main: #f8fafc;
-  --text-heading: #ffffff;
-  --text-muted: #94a3b8;
-  --text-subtle: #64748b;
+  /* Status & Action Colors */
+  --color-primary: #3B82F6;
+  --color-success: #22C55E;
+  --color-warning: #F59E0B;
+  --color-danger: #EF4444;
+  --color-offline: #64748B;
 
-  --border-color: rgba(255, 255, 255, 0.1);
-  --border-subtle: rgba(255, 255, 255, 0.06);
+  /* Typography Colors */
+  --text-main: #F8FAFC;
+  --text-heading: #FFFFFF;
+  --text-muted: #94A3B8;
+  --text-subtle: #64748B;
 
-  --input-bg: #0b0f19;
-  --input-border: #334155;
-  --input-focus-border: #60a5fa;
+  /* Form & Interactive Elements */
+  --input-bg: #111827;
+  --input-border: #243044;
+  --input-focus-border: #3B82F6;
 
-  --card-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 0 1px 1px rgba(255, 255, 255, 0.05);
-  --card-shadow-hover: 0 20px 35px -5px rgba(0, 0, 0, 0.6), 0 0 1px 1px rgba(59, 130, 246, 0.2);
+  /* Card Shadow System */
+  --card-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.5);
+  --card-shadow-hover: 0 10px 25px -3px rgba(0, 0, 0, 0.7);
 
-  --table-header-bg: #0f172a;
-  --table-hover-bg: rgba(255, 255, 255, 0.04);
-  --dropdown-bg: #131b2e;
+  /* Table Colors */
+  --table-header-bg: #1E293B;
+  --table-hover-bg: #1F2937;
 
-  --summary-primary-bg: rgba(13, 110, 253, 0.15);
-  --summary-primary-border: rgba(13, 110, 253, 0.3);
-  --summary-success-bg: rgba(25, 135, 84, 0.15);
-  --summary-success-border: rgba(25, 135, 84, 0.3);
-  --summary-warning-bg: rgba(255, 193, 7, 0.15);
-  --summary-warning-border: rgba(255, 193, 7, 0.3);
-  --summary-danger-bg: rgba(220, 53, 69, 0.15);
-  --summary-danger-border: rgba(220, 53, 69, 0.3);
+  /* Status Fill Overlays */
+  --summary-primary-bg: rgba(59, 130, 246, 0.12);
+  --summary-primary-border: rgba(59, 130, 246, 0.3);
+  --summary-success-bg: rgba(34, 197, 94, 0.12);
+  --summary-success-border: rgba(34, 197, 94, 0.3);
+  --summary-warning-bg: rgba(245, 158, 11, 0.12);
+  --summary-warning-border: rgba(245, 158, 11, 0.3);
+  --summary-danger-bg: rgba(239, 68, 68, 0.12);
+  --summary-danger-border: rgba(239, 68, 68, 0.3);
 }
 
 * {
@@ -91,6 +115,7 @@
 body {
   min-width: 320px;
   margin: 0;
+  font-family: var(--font-sans);
   background-color: var(--bg-main) !important;
   color: var(--text-main) !important;
   transition: background-color 0.25s ease, color 0.25s ease;
@@ -100,10 +125,86 @@ button,
 input,
 select,
 textarea {
-  font: inherit;
+  font-family: var(--font-sans);
+}
+
+/* Typography Hierarchy Enforcement */
+.page-title {
+  font-size: 28px !important;
+  font-weight: 700 !important;
+  color: var(--text-heading) !important;
+  letter-spacing: -0.02em;
+}
+
+.section-title {
+  font-size: 18px !important;
+  font-weight: 600 !important;
+  color: var(--text-heading) !important;
+  letter-spacing: -0.01em;
+}
+
+.card-title-custom {
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  color: var(--text-heading) !important;
+}
+
+.body-text {
+  font-size: 14px !important;
+  font-weight: 400 !important;
+  color: var(--text-main) !important;
+}
+
+.secondary-text {
+  font-size: 13px !important;
+  font-weight: 400 !important;
+  color: var(--text-muted) !important;
+}
+
+.extra-small-text {
+  font-size: 12px !important;
+  font-weight: 400 !important;
+  color: var(--text-subtle) !important;
+}
+
+/* Enterprise Card Overrides */
+.card {
+  background-color: var(--bg-card) !important;
+  border: 1px solid var(--border-color) !important;
+  color: var(--text-main) !important;
+  border-radius: 12px !important;
+  box-shadow: var(--card-shadow) !important;
+  transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease;
+}
+
+.table {
+  color: var(--text-main) !important;
+  --bs-table-bg: transparent !important;
+}
+
+.table th {
+  border-bottom: 1px solid var(--border-color) !important;
+  color: var(--text-muted) !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background-color: var(--table-header-bg) !important;
+}
+
+.table td {
+  border-bottom: 1px solid var(--border-subtle) !important;
+  vertical-align: middle;
+  color: var(--text-main) !important;
+}
+
+.modal-content {
+  background-color: var(--bg-card) !important;
+  border: 1px solid var(--border-color) !important;
+  color: var(--text-main) !important;
+  border-radius: 16px !important;
 }
 
 #root {
   min-height: 100vh;
 }
-

@@ -75,3 +75,28 @@ class HealthRecord(db.Model):
         default=datetime.utcnow,
         onupdate=datetime.utcnow
     )
+
+    def to_dict(self):
+        u = getattr(self, "user", None)
+        return {
+            "record_id": self.record_id,
+            "id": self.record_id,
+            "user_id": self.user_id,
+            "patient_id": u.patient_code if u else f"PAT{self.user_id:05d}",
+            "patient_name": u.full_name if u else "Bệnh nhân",
+            "blood_pressure": self.blood_pressure or "120/80",
+            "heart_rate": self.heart_rate or 75,
+            "spo2": self.spo2 or 98,
+            "body_temperature": self.body_temperature or 36.8,
+            "temperature": self.body_temperature or 36.8,
+            "blood_glucose": self.blood_glucose or 95,
+            "glucose": self.blood_glucose or 95,
+            "disease": self.disease or "Theo dõi sức khỏe định kỳ",
+            "fall_risk_score": self.fall_risk_score or 15,
+            "risk_level": self.risk_level or "Thấp",
+            "adherence_rate": self.adherence_rate or 100,
+            "ai_prediction": self.ai_prediction or "Chỉ số ổn định",
+            "recorded_at": self.recorded_at.isoformat() if self.recorded_at else (self.created_at.isoformat() if self.created_at else None),
+            "created_at": self.created_at.isoformat() if self.created_at else None
+        }
+

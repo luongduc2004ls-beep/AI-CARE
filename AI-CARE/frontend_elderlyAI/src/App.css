@@ -2,10 +2,11 @@
 .app-main-content {
   min-height: 100vh;
   background-color: var(--bg-main) !important;
-  transition: background-color 0.25s ease;
+  color: var(--text-main) !important;
+  transition: background-color 0.25s ease, color 0.25s ease;
 }
 
-/* Header Sticky & Autohide styling */
+/* Header Sticky & Glass styling */
 header.sticky-top {
   position: sticky;
   top: 0;
@@ -13,6 +14,7 @@ header.sticky-top {
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border-color) !important;
+  color: var(--text-main) !important;
   transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease, background-color 0.25s ease, border-color 0.25s ease !important;
   will-change: transform, opacity;
 }
@@ -100,7 +102,7 @@ header.header-visible {
 .form-control:focus,
 .form-select:focus {
   border-color: var(--input-focus-border) !important;
-  box-shadow: 0 0 0 0.25rem rgba(59, 130, 246, 0.25) !important;
+  box-shadow: 0 0 0 0.25rem rgba(37, 99, 235, 0.2) !important;
 }
 
 .input-group-text {
@@ -110,15 +112,6 @@ header.header-visible {
 }
 
 /* Buttons & Interactive Elements */
-.medicine-action-button {
-  min-height: 34px;
-}
-
-.medicine-search-input {
-  min-height: 44px;
-  border-radius: 10px;
-}
-
 .btn-light {
   background-color: var(--bg-card-subtle) !important;
   color: var(--text-main) !important;
@@ -152,92 +145,60 @@ header.header-visible {
   border-color: var(--border-color) !important;
 }
 
-/* Bootstrap helper color adjustments for dark mode */
-[data-bs-theme="dark"] .text-dark, .dark-theme .text-dark,
-[data-bs-theme="dark"] .text-body, .dark-theme .text-body {
-  color: var(--text-main) !important;
+/* Common Text Contrast Enforcement */
+[data-bs-theme="dark"] .text-dark, .dark-theme .text-dark {
+  color: #F8FAFC !important;
+}
+[data-bs-theme="light"] .text-dark, .light-theme .text-dark {
+  color: #0F172A !important;
 }
 
-[data-bs-theme="dark"] .text-muted, .dark-theme .text-muted,
-[data-bs-theme="dark"] .text-secondary, .dark-theme .text-secondary {
-  color: var(--text-muted) !important;
+[data-bs-theme="dark"] .text-white, .dark-theme .text-white {
+  color: #FFFFFF !important;
 }
-
-[data-bs-theme="dark"] .bg-light, .dark-theme .bg-light,
-[data-bs-theme="dark"] .bg-body-tertiary, .dark-theme .bg-body-tertiary {
-  background-color: var(--bg-card-subtle) !important;
-  color: var(--text-main) !important;
+[data-bs-theme="light"] .text-white-adaptive {
+  color: #0F172A !important;
 }
 
 [data-bs-theme="dark"] .bg-white, .dark-theme .bg-white {
   background-color: var(--bg-card) !important;
-  color: var(--text-main) !important;
+}
+[data-bs-theme="light"] .bg-white, .light-theme .bg-white {
+  background-color: #FFFFFF !important;
 }
 
-[data-bs-theme="dark"] .badge.text-bg-light, .dark-theme .badge.text-bg-light {
+[data-bs-theme="dark"] .bg-light, .dark-theme .bg-light {
+  background-color: var(--bg-card-subtle) !important;
+}
+[data-bs-theme="light"] .bg-light, .light-theme .bg-light {
+  background-color: #F1F5F9 !important;
+}
+
+/* Badges */
+.badge.text-bg-light,
+.badge-subtle {
   background-color: var(--bg-card-subtle) !important;
   color: var(--text-main) !important;
-  border-color: var(--border-color) !important;
+  border: 1px solid var(--border-color) !important;
 }
 
-[data-bs-theme="dark"] .table-light, .dark-theme .table-light {
-  --bs-table-bg: var(--table-header-bg) !important;
-  --bs-table-color: var(--text-main) !important;
-  color: var(--text-main) !important;
+[data-bs-theme="dark"] .badge.text-bg-light,
+.dark-theme .badge.text-bg-light {
+  background-color: #1F2937 !important;
+  color: #F8FAFC !important;
+  border-color: #374151 !important;
 }
 
-/* Fix badge & alert text contrast in all themes */
-.badge.bg-danger {
-  color: #ffffff !important;
+[data-bs-theme="light"] .badge.text-bg-light,
+.light-theme .badge.text-bg-light {
+  background-color: #F1F5F9 !important;
+  color: #0F172A !important;
+  border-color: #CBD5E1 !important;
 }
 
-.badge.bg-primary {
-  color: #ffffff !important;
-}
-
-.badge.bg-success {
-  color: #ffffff !important;
-}
-
-.badge.bg-info {
-  color: #0f172a !important;
-}
-
-.badge.bg-warning {
-  color: #0f172a !important;
-}
-
-/* Ensure text inside danger/warning/info/success alerts is always legible */
-[data-bs-theme="dark"] .text-danger, .dark-theme .text-danger {
-  color: #ff6b6b !important;
-}
-
-[data-bs-theme="dark"] .text-success, .dark-theme .text-success {
-  color: #51cf66 !important;
-}
-
-[data-bs-theme="dark"] .text-info, .dark-theme .text-info {
-  color: #38d9a9 !important;
-}
-
-[data-bs-theme="dark"] .text-warning, .dark-theme .text-warning {
-  color: #fcc419 !important;
-}
-
-@media (max-width: 991.98px) {
-  .app-main-content {
-    min-height: auto;
-  }
-}
-
-@media (max-width: 575.98px) {
-  .medicine-management-card .card-body {
-    padding: 1rem;
-  }
-
-  .medicine-table thead th,
-  .medicine-table tbody td {
-    padding: 0.75rem;
-  }
-}
+.badge.bg-danger, .badge.text-bg-danger { color: #ffffff !important; }
+.badge.bg-primary, .badge.text-bg-primary { color: #ffffff !important; }
+.badge.bg-success, .badge.text-bg-success { color: #ffffff !important; font-weight: 600 !important; }
+.badge.bg-info, .badge.text-bg-info { color: #0f172a !important; font-weight: 600 !important; }
+.badge.bg-warning, .badge.text-bg-warning { color: #0f172a !important; font-weight: 600 !important; }
 

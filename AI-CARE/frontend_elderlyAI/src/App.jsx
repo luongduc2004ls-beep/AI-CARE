@@ -1,16 +1,23 @@
 // ==============================================================================
 // ỨNG DỤNG CHÍNH FRONTEND REACT (APP.JSX)
-// ==============================================================================
-// Mô tả: Component gốc điều hướng (Routing), quản lý Auth State và nhúng
-//        ChatbotWidget có sẵn của bạn kết nối tới Gemini AI Backend.
+// Kiến trúc Phân Tách Tuyệt Đối: Admin Web vs User Web (Family Care)
 // ==============================================================================
 
 import { useEffect, useState } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import "./App.css";
-import Dashboard from "./components/Dashboard/Dashboard";
-import Header from "./components/Layout/Header";
-import Sidebar from "./components/Layout/Sidebar";
+
+// Admin & User Components
+import AdminDashboard from "./components/Dashboard/AdminDashboard";
+import UserDashboard from "./components/User/UserDashboard";
+import AdminSidebar from "./components/Layout/AdminSidebar";
+import UserSidebar from "./components/Layout/UserSidebar";
+import AdminHeader from "./components/Layout/AdminHeader";
+import UserHeader from "./components/Layout/UserHeader";
+import AdminAIPage from "./pages/admin/AdminAIPage";
+import UserAIPage from "./pages/user/UserAIPage";
+
+// Common Pages
 import MedicineTable from "./components/Medicine/MedicineTable";
 import AlertPage from "./pages/AlertPage";
 import ElderlyPage from "./pages/ElderlyPage";
@@ -19,20 +26,24 @@ import SettingsPage from "./pages/SettingsPage";
 import CameraPage from "./pages/CameraPage";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
-import ChatbotPage from "./pages/ChatbotPage"; // Trang Chatbot Gemini full màn hình
-import ChatbotWidget from "./components/ChatbotWidget"; // Component ChatbotWidget có sẵn của bạn
-import { AuthProvider } from "./context/AuthContext";
+import ChatbotWidget from "./components/ChatbotWidget";
+
+// Context Providers
+import { AuthProvider, useAuth } from "./context/AuthContext";
+import { PatientProvider } from "./context/PatientContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import { addActivity as saveActivity, getActivities } from "./services/activityService";
 import { getMedicines } from "./services/medicineService";
 import storageSyncService from "./services/storageSyncService";
 
 function AppContent() {
+  const { currentUser, isAuthenticated } = useAuth();
+  const isAdmin = currentUser?.role === "Admin";
+
   const [medicines, setMedicines] = useState(() => getMedicines());
   const [activities, setActivities] = useState(() => getActivities());
   const location = useLocation();
 
-  // Tự động khởi chạy tiến trình lưu trữ và đánh chỉ mục tìm kiếm ngay khi mở ứng dụng Web
   useEffect(() => {
     storageSyncService.initAutoSync();
   }, []);
@@ -64,33 +75,52 @@ function AppContent() {
   }
 
   return (
-    <div className="container-fluid px-0">
+    <div className={`container-fluid px-0 ${isAdmin ? "admin-scope-theme" : "user-scope-theme"}`}>
       <div className="row g-0">
-        {/* Thanh Menu bên trái (Sidebar Navigation) */}
-        <aside className="col-lg-2"><Sidebar /></aside>
+        {/* Thanh Menu bên trái (Phân tách hoàn toàn Admin vs User) */}
+        <aside className="col-lg-2">
+          {isAdmin ? <AdminSidebar /> : <UserSidebar />}
+        </aside>
 
         {/* Khu vực nội dung chính của ứng dụng */}
         <main className="col-lg-10 app-main-content">
-          <Header />
+          {/* Header Phân tách hoàn toàn Admin vs User */}
+          {isAdmin ? <AdminHeader /> : <UserHeader />}
 
-          {/* Định tuyến các trang giao diện (App Routes) */}
+          {/* Định tuyến các trang giao diện */}
           <Routes>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            <Route path="/dashboard" element={<Dashboard medicines={medicines} activities={activities} />} />
-            <Route path="/chatbot" element={<ChatbotPage />} />
+            
+            {/* Dashboard: Admin nhận AdminDashboard, User nhận UserDashboard */}
+            <Route
+              path="/dashboard"
+              element={isAdmin ? <AdminDashboard /> : <UserDashboard />}
+            />
+            
+            {/* AI Phân tách hoàn toàn: Admin nhận AdminAIPage, User nhận UserAIPage */}
+            <Route path="/admin/ai" element={isAdmin ? <AdminAIPage /> : <Navigate to="/user/ai" replace />} />
+            <Route path="/user/ai" element={!isAdmin ? <UserAIPage /> : <Navigate to="/admin/ai" replace />} />
+            <Route path="/chatbot" element={isAdmin ? <AdminAIPage /> : <UserAIPage />} />
+            
             <Route path="/camera" element={<CameraPage />} />
             <Route path="/medicine" element={medicinePage} />
             <Route path="/elderly" element={<ElderlyPage />} />
             <Route path="/health" element={<HealthPage />} />
             <Route path="/notification" element={<AlertPage />} />
             <Route path="/alert" element={<AlertPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
+            
+            {/* Route Cấu hình chỉ Admin được truy cập */}
+            <Route
+              path="/settings"
+              element={isAdmin ? <SettingsPage /> : <Navigate to="/dashboard" replace />}
+            />
+            
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>
         </main>
       </div>
 
-      {/* Tích hợp ChatbotWidget có sẵn của bạn kết nối Backend Flask Gemini API */}
+      {/* Tích hợp ChatbotWidget kết nối Backend Gemini AI */}
       <ChatbotWidget apiUrl="http://localhost:5000/chat" />
     </div>
   );
@@ -99,9 +129,11 @@ function AppContent() {
 function App() {
   return (
     <AuthProvider>
-      <ThemeProvider>
-        <AppContent />
-      </ThemeProvider>
+      <PatientProvider>
+        <ThemeProvider>
+          <AppContent />
+        </ThemeProvider>
+      </PatientProvider>
     </AuthProvider>
   );
 }

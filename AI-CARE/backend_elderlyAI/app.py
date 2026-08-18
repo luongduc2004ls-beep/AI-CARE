@@ -16,7 +16,10 @@ from routes.patient_routes import patient_bp
 from routes.camera_routes import camera_bp
 from routes.notification_routes import notification_bp
 from routes.auth_routes import auth_bp
+from routes.health_routes import health_bp
 from routes.chatbot_routes import chatbot_bp, chat_with_gemini  # Route Trợ lý Chatbot AI Gemini
+from routes.admin_ai_routes import admin_ai_bp  # Nhánh AI Quản Trị Hệ Thống
+from routes.user_ai_routes import user_ai_bp    # Nhánh AI Chăm Sóc Người Thân
 
 # Import Error Handler trung tâm
 from middleware.exception import register_error
@@ -51,7 +54,10 @@ app.register_blueprint(patient_bp, url_prefix="/api")
 app.register_blueprint(camera_bp, url_prefix="/api")
 app.register_blueprint(notification_bp, url_prefix="/api")
 app.register_blueprint(auth_bp, url_prefix="/api")
-app.register_blueprint(chatbot_bp, url_prefix="/api")  # API Trợ lý Chatbot AI Google Gemini (/api/chatbot/chat)
+app.register_blueprint(health_bp, url_prefix="/api")
+app.register_blueprint(admin_ai_bp, url_prefix="/api")
+app.register_blueprint(user_ai_bp, url_prefix="/api")
+app.register_blueprint(chatbot_bp, url_prefix="/api")
 
 # Đăng ký thêm Alias Endpoint /chat hỗ trợ khớp trực tiếp với component ChatbotWidget của bạn
 @app.route("/chat", methods=["POST"])
@@ -85,10 +91,22 @@ def get_database_status():
 
 def create_tables_if_database_is_ready():
     """
-    Tự động khởi tạo các bảng CSDL nếu kết nối MySQL đã sẵn sàng.
+    Tự động khởi tạo các bảng CSDL và migration an toàn các cột bổ sung nếu chưa tồn tại.
     """
     try:
         db.create_all()
+        # Safe migration for newly added columns
+        try:
+            db.session.execute(text("ALTER TABLE Users ADD COLUMN is_active BOOLEAN DEFAULT 1"))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+        try:
+            db.session.execute(text("ALTER TABLE Users ADD COLUMN deleted_at DATETIME"))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+
         app.config["DATABASE_AVAILABLE"] = True
         print("Database connected. Tables are ready.")
     except SQLAlchemyError as exc:

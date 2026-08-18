@@ -357,14 +357,21 @@ function MedicineTable({ addActivity }) {
                       <td className="fw-semibold">{medicine.name}</td>
                       <td>{medicine.dosage}</td>
                       <td>
-                        <span className="badge text-bg-light border text-dark px-3 py-2">
+                        <span
+                          className="badge px-3 py-2 fw-semibold"
+                          style={{
+                            backgroundColor: "var(--bg-card-subtle)",
+                            color: "var(--text-main)",
+                            border: "1px solid var(--border-color)"
+                          }}
+                        >
                           {medicine.time}
                         </span>
                       </td>
                       <td>
                         <span
-                          className={`badge px-3 py-2 ${
-                            medicine.status === "Đã uống" ? "text-bg-success" : "text-bg-warning"
+                          className={`badge px-3 py-2 fw-semibold ${
+                            medicine.status === "Đã uống" ? "bg-success text-white" : "bg-warning text-dark"
                           }`}
                         >
                           {medicine.status}

@@ -112,6 +112,16 @@ class User(db.Model):
         db.String(100)
     )
 
+    is_active = db.Column(
+        db.Boolean,
+        default=True
+    )
+
+    deleted_at = db.Column(
+        db.DateTime,
+        nullable=True
+    )
+
     created_at = db.Column(
         db.DateTime,
         default=datetime.utcnow
