@@ -2,9 +2,9 @@
 # CHATBOT SERVICE - DỊCH VỤ XỬ LÝ TRỢ LÝ AI CHĂM SÓC SỨC KHỎE GOOGLE GEMINI
 # ==============================================================================
 # Mô tả: File dịch vụ xử lý logic cho AI Chatbot trong backend Flask.
-#        Gửi truy vấn tới Google Gemini REST API, quản lý lịch sử hội thoại,
-#        hỗ trợ tra cứu trực tiếp dữ liệu Bệnh nhân, Thân nhân/Người nhà, Bác sĩ, Thuốc y tế
-#        và tự động cung cấp phản hồi thông minh khi API bị giới hạn ngạch.
+#        Gửi truy vấn tới Google Gemini REST API đa mô hình (gemini-2.5-flash, 2.0-flash, 1.5-flash, 1.5-pro),
+#        quản lý lịch sử hội thoại, truy vấn thời gian thực từ CSDL MySQL (Users, Medicines, HealthRecords, Schedules)
+#        và tự động cung cấp phản hồi y tế toàn diện không bị bó hẹp.
 # ==============================================================================
 
 import os
@@ -26,8 +26,9 @@ class ChatbotService:
     _patients_data = None
 
     CANDIDATE_MODELS = [
-        "gemini-1.5-flash",
+        "gemini-2.5-flash",
         "gemini-2.0-flash",
+        "gemini-1.5-flash",
         "gemini-1.5-pro",
         "gemini-2.0-flash-exp",
         "gemini-1.5-flash-8b"
@@ -39,13 +40,41 @@ class ChatbotService:
 
     @classmethod
     def get_model_name(cls) -> str:
-        return Config.GEMINI_MODEL or os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+        return Config.GEMINI_MODEL or os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
     @classmethod
     def load_patients_data(cls) -> list:
         """
-        Tải dữ liệu từ patientsFromExcel.json để tra cứu nhanh.
+        Tra cứu trực tiếp CSDL MySQL (hoặc fallback file JSON nếu cần).
         """
+        try:
+            from models.user import User
+            users = User.query.all()
+            if users:
+                user_list = []
+                for u in users:
+                    user_list.append({
+                        "patient_id": u.patient_code or f"PAT{u.user_id:05d}",
+                        "device_id": u.device_id or f"D{u.user_id:04d}",
+                        "full_name": u.full_name,
+                        "age": u.age,
+                        "gender": u.gender,
+                        "phone": u.phone,
+                        "height_cm": u.height_cm,
+                        "weight_kg": u.weight_kg,
+                        "blood_group": u.blood_group,
+                        "allergy": u.allergy,
+                        "caregiver_name": u.caregiver_name,
+                        "caregiver_relation": "Thân nhân",
+                        "caregiver_phone": u.caregiver_phone,
+                        "caregiver_email": f"{u.user_id}@caregiver.ai",
+                        "doctor_name": u.doctor_name or "Bác sĩ Chuyên khoa AI Care",
+                        "medical_history": u.address or "Theo dõi sức khỏe định kỳ"
+                    })
+                return user_list
+        except Exception as e:
+            print(f"[ChatbotService] MySQL query fallback to JSON: {e}")
+
         if cls._patients_data is not None:
             return cls._patients_data
         try:
@@ -57,78 +86,83 @@ class ChatbotService:
                     cls._patients_data = json.load(f)
                     return cls._patients_data
         except Exception as e:
-            print(f"[ChatbotService] Load patients data error: {e}")
+            print(f"[ChatbotService] Load patients JSON data error: {e}")
         return []
 
     @classmethod
     def search_database_entities(cls, query: str) -> str:
         """
-        Tra cứu thông tin Bệnh nhân, Thân nhân/Người nhà, Bác sĩ và Thuốc y tế
-        từ cơ sở dữ liệu AI CARE dựa trên từ khóa tìm kiếm của người dùng.
+        Tra cứu thông tin Bệnh nhân, Thân nhân/Người nhà, Bác sĩ và Thuốc y tế.
+        Chỉ kích hoạt tra cứu danh sách Bệnh nhân khi có từ khóa tìm kiếm cụ thể (PAT, D, hoặc ý định tìm kiếm hồ sơ).
         """
         query_lower = query.lower().strip()
-        patients = cls.load_patients_data()
+
+        # Danh sách từ khóa tư vấn y tế - dinh dưỡng tổng quát (KHÔNG tự động đổ danh sách bệnh nhân)
+        general_medical_keywords = [
+            "ăn", "thực phẩm", "chế độ ăn", "dinh dưỡng", "món ăn", "bệnh", "huyết áp", 
+            "tiểu đường", "tim mạch", "tai biến", "đột quỵ", "tập thể dục", "sinh hoạt", 
+            "uống nước", "triệu chứng", "tác dụng phụ", "nguyên nhân", "phòng ngừa", "chữa", "điều trị",
+            "mất ngủ", "xương khớp", "đau đầu", "chóng mặt"
+        ]
+        
+        pat_ids = re.findall(r'pat\d+', query_lower)
+        dev_ids = re.findall(r'd\d+', query_lower)
+
+        is_general_medical_q = any(kw in query_lower for kw in general_medical_keywords) and not pat_ids and not dev_ids
 
         matched_patients = []
-        
-        # 1. Tìm theo mã bệnh nhân PAT100xx hoặc mã thiết bị D10xx
-        pat_ids = re.findall(r'pat\d{5}', query_lower)
-        dev_ids = re.findall(r'd\d{4}', query_lower)
-
-        if pat_ids:
-            target_id = pat_ids[0].upper()
-            matched_patients = [p for p in patients if p.get("patient_id") == target_id]
-        elif dev_ids:
-            target_dev = dev_ids[0].upper()
-            matched_patients = [p for p in patients if p.get("device_id") == target_dev]
-        else:
-            # 2. Tìm theo tên bệnh nhân, tên người nhà, tên bác sĩ, số điện thoại
-            for p in patients:
-                p_name = str(p.get("full_name", "")).lower()
-                cg_name = str(p.get("caregiver_name", "")).lower()
-                doc_name = str(p.get("doctor_name", "")).lower()
-                p_id = str(p.get("patient_id", "")).lower()
-
-                # Tách từ khóa tìm kiếm
-                search_words = [w for w in query_lower.split() if len(w) >= 2 and w not in [
-                    "bệnh", "nhân", "thông", "tin", "người", "nhà", "bác", "sĩ", "thân", "xem", "cho", "tôi", "tìm", "kiểm", "tra", "mã", "sĐT"
-                ]]
-
-                if search_words:
-                    if any(w in p_name for w in search_words) or any(w in cg_name for w in search_words) or any(w in doc_name for w in search_words) or (p_id in query_lower):
-                        if p not in matched_patients:
-                            matched_patients.append(p)
-
-        # 3. Tra cứu thuốc y tế
         medicine_info = []
-        meds_db = {
-            "paracetamol": "Paracetamol 500mg - Thuốc giảm đau, hạ sốt. Liều dùng: 1 viên/lần (cách nhau 4-6h nếu cần).",
-            "amlodipine": "Amlodipine 5mg - Thuốc điều trị tăng huyết áp & đau thắt ngực. Liều dùng: 1 viên/ngày (buổi sáng).",
-            "metformin": "Metformin 850mg - Thuốc kiểm soát đường huyết cho bệnh nhân Tiểu đường Type 2. Liều dùng: 1 viên/ngày (sau ăn).",
-            "losartan": "Losartan 50mg - Thuốc hạ huyết áp & bảo vệ thận cho bệnh nhân tiểu đường. Liều dùng: 1 viên/ngày (buổi sáng).",
-            "panadol": "Panadol Extra - Thuốc giảm đau hạ sốt tăng cường Caffeine. Liều dùng: 1 viên khi đau (>6h/lần).",
-            "aspirin": "Aspirin 81mg - Thuốc chống kết tập tiểu cầu, phòng ngừa huyết khối tim mạch. Liều dùng: 1 viên/ngày (buổi trưa).",
-            "atorvastatin": "Atorvastatin 10mg - Thuốc hạ mỡ máu (Cholesterol). Liều dùng: 1 viên/ngày (buổi tối).",
-            "omeprazole": "Omeprazole 20mg - Thuốc ức chế bơm proton điều trị viêm dạ dày, trào ngược. Liều dùng: 1 viên/ngày (trước ăn sáng)."
-        }
 
-        for med_kw, med_desc in meds_db.items():
-            if med_kw in query_lower:
-                medicine_info.append(med_desc)
+        # Tra cứu thuốc nếu người dùng đề cập tên thuốc cụ thể
+        try:
+            from models.medicine import Medicine
+            meds = Medicine.query.all()
+            if meds:
+                for m in meds:
+                    m_name = (m.medicine_name or "").lower()
+                    if len(m_name) >= 3 and m_name in query_lower:
+                        medicine_info.append(f"{m.medicine_name} (Mã: {m.medicine_code or 'N/A'}) - Liều dùng: {m.dosage or '1 viên'} - Tần suất: {m.frequency or '08:00'}")
+        except Exception:
+            pass
 
-        # Trả về danh sách mặc định nếu hỏi chung chung về danh sách bệnh nhân / người nhà / bác sĩ
-        if not matched_patients and not medicine_info:
-            if any(kw in query_lower for kw in ["danh sách", "bệnh nhân", "người nhà", "bác sĩ", "tất cả"]):
-                matched_patients = patients[:3]
+        if not medicine_info:
+            meds_db = {
+                "paracetamol": "Paracetamol 500mg - Thuốc giảm đau, hạ sốt. Liều dùng: 1 viên/lần (cách nhau 4-6h nếu cần).",
+                "amlodipine": "Amlodipine 5mg - Thuốc điều trị tăng huyết áp & đau thắt ngực. Liều dùng: 1 viên/ngày (buổi sáng).",
+                "metformin": "Metformin 850mg - Thuốc kiểm soát đường huyết cho bệnh nhân Tiểu đường Type 2. Liều dùng: 1 viên/ngày (sau ăn).",
+                "losartan": "Losartan 50mg - Thuốc hạ huyết áp & bảo vệ thận cho bệnh nhân tiểu đường. Liều dùng: 1 viên/ngày (buổi sáng).",
+                "panadol": "Panadol Extra - Thuốc giảm đau hạ sốt tăng cường Caffeine. Liều dùng: 1 viên khi đau (>6h/lần).",
+                "aspirin": "Aspirin 81mg - Thuốc chống kết tập tiểu cầu, phòng ngừa huyết khối tim mạch. Liều dùng: 1 viên/ngày (buổi trưa).",
+                "atorvastatin": "Atorvastatin 10mg - Thuốc hạ mỡ máu (Cholesterol). Liều dùng: 1 viên/ngày (buổi tối).",
+                "omeprazole": "Omeprazole 20mg - Thuốc ức chế bơm proton điều trị viêm dạ dày, trào ngược. Liều dùng: 1 viên/ngày (trước ăn sáng)."
+            }
+
+            for med_kw, med_desc in meds_db.items():
+                if med_kw in query_lower:
+                    medicine_info.append(med_desc)
+
+        # Chỉ tra cứu danh sách Bệnh nhân khi người dùng hỏi đích danh hồ sơ hoặc có mã PAT/D
+        if not is_general_medical_q:
+            patients = cls.load_patients_data()
+            if pat_ids:
+                target_id = pat_ids[0].upper()
+                matched_patients = [p for p in patients if str(p.get("patient_id", "")).upper() == target_id]
+            elif dev_ids:
+                target_dev = dev_ids[0].upper()
+                matched_patients = [p for p in patients if str(p.get("device_id", "")).upper() == target_dev]
+            else:
+                explicit_search_intent = any(kw in query_lower for kw in ["mã bệnh nhân", "tìm bệnh nhân", "xem hồ sơ", "bác sĩ phụ trách", "người nhà của", "tìm kiếm bệnh nhân", "danh sách bệnh nhân"])
+                if explicit_search_intent:
+                    matched_patients = patients[:3]
 
         if not matched_patients and not medicine_info:
             return ""
 
-        result = ["📋 **DỮ LIỆU TRA CỨU CƠ SỞ DỮ LIỆU AI CARE:**"]
+        result = ["📋 **DỮ LIỆU TRA CỨU CƠ SỞ DỮ LIỆU AI CARE (THỜI GIAN THỰC):**"]
 
         if medicine_info:
             result.append("\n💊 **Thông tin Thuốc & Dược phẩm:**")
-            for m in medicine_info:
+            for m in medicine_info[:5]:
                 result.append(f"- {m}")
 
         if matched_patients:
@@ -148,22 +182,18 @@ class ChatbotService:
     @classmethod
     def get_system_prompt(cls) -> str:
         return (
-            "Bạn là Trợ lý AI Chăm sóc Sức khỏe & Y tế chuyên nghiệp của hệ thống AI CARE dành cho người cao tuổi. "
-            "Nhiệm vụ chính của bạn:\n"
-            "1. Tư vấn sức khỏe, dinh dưỡng, lối sống lành mạnh cho người cao tuổi bằng giọng văn lịch sự, ấm áp, thân thiện.\n"
-            "2. Tra cứu và cung cấp thông tin chính xác về Bệnh nhân, Thân nhân/Người nhà, Bác sĩ phụ trách và các loại Thuốc y tế khi được yêu cầu.\n"
-            "3. Hướng dẫn cách dùng thuốc, giải thích công dụng thuốc và nhắc nhở lịch uống thuốc theo đơn chỉ định.\n"
-            "4. Luôn luôn khuyên người dùng hoặc người nhà tham khảo ý kiến bác sĩ chuyên khoa đối với các triệu chứng nguy hiểm.\n"
-            "5. Trả lời bằng Tiếng Việt rõ ràng, ngắn gọn, trình bày sạch đẹp theo định dạng Markdown."
+            "Bạn là Trợ lý AI Chăm sóc Sức khỏe & Y tế chuyên nghiệp toàn năng của hệ thống AI CARE dành cho người cao tuổi và gia đình. "
+            "Bạn có tri thức y khoa sâu rộng, cập nhật và không bị hạn chế trong bất kỳ chủ đề tư vấn y tế, bệnh học, dược phẩm, dinh dưỡng, lối sống hay tâm lý nào.\n\n"
+            "Nhiệm vụ và nguyên tắc phản hồi:\n"
+            "1. Tự do trả lời chi tiết, chính xác, khoa học và chu đáo cho MỌI câu hỏi y tế, bệnh tật, triệu chứng, cách điều trị, thuốc và dinh dưỡng mà người dùng đặt ra.\n"
+            "2. Khi được cung cấp [DỮ LIỆU CƠ SỞ DỮ LIỆU AI CARE], hãy ưu tiên dùng dữ liệu này để trả lời chính xác về thông tin Bệnh nhân, Người nhà, Bác sĩ, Lịch uống thuốc và Báo động khẩn cấp.\n"
+            "3. Giọng văn luôn ấm áp, thấu hiểu, kính trọng người cao tuổi và gia đình.\n"
+            "4. Cung cấp lời khuyên thiết thực và luôn khuyến cáo đi khám bác sĩ chuyên khoa đối với các dấu hiệu nguy hiểm.\n"
+            "5. Trình bày bài viết đẹp mắt, dễ đọc với các biểu tượng icon, gạch đầu dòng và định dạng Markdown chuẩn."
         )
 
     @classmethod
     def sanitize_contents(cls, raw_contents: list) -> list:
-        """
-        Chuẩn hóa danh sách contents gửi tới Google Gemini API:
-        1. Bỏ các turn 'model' ở đầu (Gemini API bắt buộc turn đầu tiên phải có role là 'user').
-        2. Đảm bảo các turn luân phiên nghiêm ngặt giữa 'user' và 'model', loại bỏ trùng lặp liên tiếp.
-        """
         if not raw_contents:
             return []
 
@@ -187,8 +217,8 @@ class ChatbotService:
     @classmethod
     def get_smart_medical_fallback(cls, user_message: str) -> str:
         """
-        Sinh phản hồi tư vấn y tế thông minh tự động dựa trên câu hỏi người dùng
-        khi Gemini API gặp sự cố giới hạn ngạch truy vấn (429 Rate Limit) hoặc kết nối mạng.
+        Sinh phản hồi tư vấn y tế chuyên sâu, mở rộng toàn diện cho người dùng
+        dựa trên các chủ đề y khoa, dinh dưỡng, bệnh học và dược phẩm.
         """
         db_search_res = cls.search_database_entities(user_message)
         if db_search_res:
@@ -196,60 +226,88 @@ class ChatbotService:
 
         msg_lower = user_message.lower().strip()
 
+        # 1. Tư vấn Chế độ Dinh dưỡng cho Người Huyết áp Cao
+        if any(kw in msg_lower for kw in ["huyết áp cao", "tăng huyết áp", "huyết áp"]) and any(kw in msg_lower for kw in ["ăn", "thực phẩm", "dinh dưỡng", "uống", "kiêng"]):
+            return (
+                "🥗 **TƯ VẤN CHẾ ĐỘ DINH DƯỠNG CHO NGƯỜI TĂNG HUYẾT ÁP:**\n\n"
+                "Đối với người cao tuổi bị tăng huyết áp, chế độ ăn **DASH (Dietary Approaches to Stop Hypertension)** là giải pháp chuẩn y khoa giúp kiểm soát huyết áp hiệu quả:\n\n"
+                "🟢 **1. Các thực phẩm NÊN ĂN:**\n"
+                "- **Rau xanh & Củ quả giàu Kali:** Rau chân vịt, cải cúc, bông cải xanh, chuối, dưa hấu, cà chua (Kali giúp thận đào thải dư thừa Natri/muối qua nước tiểu).\n"
+                "- **Trái cây giàu Vitamin C & Flavonoid:** Cam, bưởi, dâu tây, việt quất (giúp làm bền thành mạch máu).\n"
+                "- **Cá béo giàu Omega-3:** Cá hồi, cá thu, cá ngừ (uống hoặc ăn 2-3 bữa/tuần giúp giảm viêm và hạ huyết áp).\n"
+                "- **Ngũ cốc nguyên hạt & Yến mạch:** Giàu chất xơ Beta-glucan giúp giảm cholesterol và ổn định huyết áp.\n"
+                "- **Tỏi & Các loại hạt (Hạnh nhân, Óc chó):** Tỏi chứa Allicin giúp giãn mạch máu tự nhiên.\n\n"
+                "🔴 **2. Các thực phẩm NÊN HẠN CHẾ / KIÊNG:**\n"
+                "- **Muối & Đồ ăn mặn:** Giới hạn < 5g muối/ngày (< 1 thìa cà phê). Hạn chế dưa muối, mắm tôm, mì ăn liền.\n"
+                "- **Mỡ động vật & Đồ chiên rán:** Tránh gây xơ vữa động mạch.\n"
+                "- **Rượu bia, Cà phê đậm đặc & Nước ngọt có gas.**\n\n"
+                "💡 **Lời khuyên sinh hoạt:** Duy trì đi bộ nhẹ nhàng 30 phút mỗi ngày, giữ tinh thần thư thái và uống thuốc huyết áp đúng giờ theo đơn chỉ định của bác sĩ!"
+            )
+
+        # 2. Tư vấn Chế độ Dinh dưỡng & Kiểm soát Tiểu đường
+        if any(kw in msg_lower for kw in ["tiểu đường", "đường huyết"]):
+            return (
+                "🩸 **TƯ VẤN DINH DƯỠNG & KIỂM SOÁT ĐƯỜNG HUYẾT:**\n\n"
+                "🟢 **1. Thực phẩm NÊN DÙNG:**\n"
+                "- **Rau củ nhiều chất xơ:** Cải xanh, dưa leo, khổ qua (mướp đắng), đậu bắp (làm chậm hấp thu đường).\n"
+                "- **Tinh bột hấp thu chậm:** Gạo lứt, khoai lang luộc, yến mạch (thay thế gạo trắng).\n"
+                "- **Đạm lành mạnh:** Ức gà, cá, đậu phụ, trứng luộc.\n\n"
+                "🔴 **2. Cần Tránh:** Bánh kẹo ngọt, chè, nước ép trái cây đóng hộp, hoa quả quá ngọt (nhãn, vải, sầu riêng).\n\n"
+                "🎯 **Mức đường huyết mục tiêu lúc đói:** **70 - 130 mg/dL** (3.9 - 7.2 mmol/L)."
+            )
+
+        # 3. Tư vấn Sức khỏe Tim mạch & Tai biến / Đột quỵ
+        if any(kw in msg_lower for kw in ["đột quỵ", "tai biến", "tim", "tim mạch"]):
+            return (
+                "❤️ **PHÒNG NGỪA ĐỘT QUỴ & BẢO VỆ TIM MẠCH NGUỜI CAO TUỔI:**\n\n"
+                "🚨 **Nhận biết sớm dấu hiệu Đột quỵ (Quy tắc F.A.S.T):**\n"
+                "- **F (Face):** Méo miệng, lệch một bên mặt khi cười.\n"
+                "- **A (Arm):** Tê yếu một bên tay hoặc chân, không giơ cao được.\n"
+                "- **S (Speech):** Nói ngọng, nói khó hoặc không nói rõ từ.\n"
+                "- **T (Time):** Gặp ngay cấp cứu 115 hoặc cơ sở y tế gần nhất trong 'Giờ Vàng' (< 3 - 4.5 giờ).\n\n"
+                "🛡️ **Mẹo phòng ngừa:** Kiểm soát tốt huyết áp, không thay đổi nhiệt độ đột ngột (tránh tắm đêm), giữ ấm cổ và ngực mùa lạnh."
+            )
+
+        # 4. Tư vấn Các loại Thuốc y tế
+        if any(kw in msg_lower for kw in ["thuốc", "uống thuốc", "paracetamol", "amlodipine", "metformin", "losartan", "panadol", "aspirin"]):
+            return (
+                "💊 **TƯ VẤN SỬ DỤNG THUỐC AN TOÀN CHO NGƯỜI CAO TUỔI:**\n\n"
+                "- **Amlodipine 5mg:** Thuốc hạ huyết áp, uống 1 viên/ngày vào buổi sáng sau ăn.\n"
+                "- **Metformin 850mg:** Thuốc kiểm soát đường huyết (Tiểu đường Type 2), uống 1 viên/ngày sau ăn.\n"
+                "- **Losartan 50mg:** Thuốc hạ huyết áp & bảo vệ thận, uống 1 viên/ngày.\n"
+                "- **Paracetamol / Panadol Extra:** Giảm đau hạ sốt, uống 1 viên khi cần (cách nhau >6 tiếng).\n"
+                "- **Aspirin 81mg:** Chống huyết khối tim mạch, uống 1 viên/ngày sau ăn trưa.\n\n"
+                "⚠️ *Lưu ý quan trọng: Tuyệt đối không tự ý ngưng thuốc huyết áp hay tiểu đường khi thấy chỉ số đã bình thường nếu chưa có ý kiến bác sĩ.*"
+            )
+
+        # 5. Lời chào & Giới thiệu
         if any(kw in msg_lower for kw in ["chào", "hi", "hello", "bắt đầu", "là ai"]):
             return (
                 "👋 **Xin chào! Tôi là Trợ lý AI Chăm sóc Sức khỏe AI CARE.**\n\n"
-                "Tôi luôn sẵn sàng hỗ trợ bác và gia đình về:\n"
-                "- 📋 **Tra cứu dữ liệu**: Bệnh nhân, Thân nhân/Người nhà, Bác sĩ phụ trách.\n"
-                "- 💊 **Thông tin các loại thuốc**: Liều lượng, công dụng, lịch uống thuốc.\n"
-                "- 🩺 **Theo dõi chỉ số sinh hiệu**: Huyết áp, Nhịp tim, SpO2, Đường huyết.\n"
-                "- 🚨 **Cảnh báo an toàn**: Phòng ngừa té ngã và xử lý sự cố khẩn cấp.\n\n"
-                "Bác/bạn đang cần tìm thông tin bệnh nhân, người nhà, bác sĩ hay loại thuốc nào ạ?"
+                "Tôi luôn sẵn sàng tư vấn toàn diện cho bác và gia đình về:\n"
+                "- 🥗 **Dinh dưỡng & Bệnh học**: Chế độ ăn cho người tăng huyết áp, tiểu đường, tim mạch, xương khớp.\n"
+                "- 💊 **Tra cứu & Tư vấn sử dụng Thuốc**: Liều dùng, công dụng, lịch uống thuốc an toàn.\n"
+                "- 📋 **Tra cứu CSDL AI Care**: Hồ sơ bệnh nhân (`PAT10001`...), người nhà, bác sĩ phụ trách.\n"
+                "- 🩺 **Theo dõi Sinh hiệu & An toàn**: Huyết áp, nhịp tim, SpO2 và phòng ngừa té ngã.\n\n"
+                "Bác/bạn đang cần tư vấn về chủ đề sức khỏe hoặc tra cứu thông tin gì ạ?"
             )
 
-        if any(kw in msg_lower for kw in ["thuốc", "uống thuốc", "paracetamol", "amlodipine", "metformin", "losartan", "panadol", "aspirin"]):
-            return (
-                "💊 **Danh mục & Tư vấn Sử dụng Thuốc an toàn:**\n\n"
-                "- **Amlodipine 5mg:** Thuốc hạ huyết áp, uống 1 viên/ngày vào buổi sáng.\n"
-                "- **Metformin 850mg:** Thuốc kiểm soát đường huyết (Tiểu đường Type 2), uống 1 viên/ngày sau ăn.\n"
-                "- **Losartan 50mg:** Thuốc hạ huyết áp & bảo vệ thận, uống 1 viên/ngày.\n"
-                "- **Paracetamol / Panadol Extra:** Giảm đau, hạ sốt, uống 1 viên khi cần (>6h/lần).\n"
-                "- **Aspirin 81mg:** Chống huyết khối tim mạch, uống 1 viên/ngày.\n\n"
-                "⚠️ *Lưu ý: Luôn tuân thủ chỉ định của bác sĩ điều trị.*"
-            )
-
-        if any(kw in msg_lower for kw in ["huyết áp", "tim", "nhịp tim", "tăng huyết áp"]):
-            return (
-                "🩺 **Tư vấn Chỉ số Huyết áp & Tim mạch:**\n\n"
-                "- **Mức huyết áp mục tiêu người cao tuổi:** **120/80 - 130/85 mmHg**.\n"
-                "- **Khi huyết áp tăng cao (≥ 140/90 mmHg):** Nghỉ ngơi nơi yên tĩnh, thả lỏng cơ thể, dùng thuốc huyết áp theo chỉ định.\n"
-                "- **Nhịp tim nghỉ ngơi bình thường:** **60 - 90 nhịp/phút**.\n\n"
-                "🚨 **Dấu hiệu cần đi khám ngay:** Đau tức ngực, vã mồ hôi hột, chóng mặt dữ dội."
-            )
-
-        if any(kw in msg_lower for kw in ["tiểu đường", "đường huyết"]):
-            return (
-                "🩸 **Tư vấn Kiểm soát Đường huyết & Dinh dưỡng:**\n\n"
-                "- **Đường huyết lúc đói chuẩn:** **70 - 130 mg/dL** (3.9 - 7.2 mmol/L).\n"
-                "- **Chế độ ăn:** Hạn chế tinh bột chế biến sẵn; bổ sung nhiều chất xơ từ rau xanh, rau củ.\n"
-                "- **Vận động:** Đi bộ nhẹ nhàng 20 - 30 phút sau bữa ăn."
-            )
-
+        # 6. Mặc định phản hồi y tế tổng quát sâu rộng
         return (
-            "🩺 **Trợ lý AI Care Chăm sóc Sức khỏe:**\n\n"
-            f"Cảm ơn câu hỏi của bác/bạn về: *'{user_message}'*.\n\n"
-            "Tôi có thể hỗ trợ bác tra cứu:\n"
-            "1. Tìm thông tin bệnh nhân theo tên hoặc mã (`PAT10000`, `PAT10001`...)\n"
-            "2. Tra cứu thông tin người nhà, thân nhân, bác sĩ phụ trách\n"
-            "3. Giải thích công dụng và hướng dẫn các loại thuốc y tế\n\n"
-            "Bác/bạn hãy nhập tên bệnh nhân, tên thuốc hoặc mã hồ sơ để tôi tìm kiếm giúp bác nhé!"
+            "🩺 **TƯ VẤN CHĂM SÓC SỨC KHỎE NGƯỜI CAO TUỔI (AI CARE):**\n\n"
+            f"Cảm ơn thắc mắc của bác/bạn về: *'{user_message}'*.\n\n"
+            "💡 **Những nguyên tắc vàng giúp duy trì sức khỏe cho người cao tuổi:**\n"
+            "1. **Dinh dưỡng cân đối:** Uống đủ 1.5 - 2 lit nước/ngày, tăng cường rau xanh, trái cây tươi và hạt ngũ cốc. Hạn chế thức ăn quá mặn hoặc mỡ động vật.\n"
+            "2. **Vận động nhẹ nhàng:** Đi bộ, dưỡng sinh hoặc yoga 20 - 30 phút mỗi ngày giúp lưu thông khí huyết và chắc khỏe xương khớp.\n"
+            "3. **Giấc ngủ & Tinh thần:** Giữ phòng ngủ thoáng mát, không dùng thiết bị điện tử trước khi ngủ, duy trì tinh thần vui vẻ bên gia đình.\n"
+            "4. **Tuân thủ lịch y tế:** Khám sức khỏe định kỳ và uống thuốc đúng liều chỉ định của bác sĩ.\n\n"
+            "Bác/bạn có thể đặt thêm các câu hỏi chi tiết về chế độ ăn, cách dùng thuốc hoặc tra cứu hồ sơ bệnh nhân để tôi hỗ trợ thêm nhé!"
         )
 
     @classmethod
     def process_chat(cls, user_message: str, session_id: str = "default_session", history: list = None) -> dict:
         """
         Xử lý tin nhắn chat từ Frontend gửi lên và gọi Gemini API để lấy câu trả lời.
-        Tự động tra cứu cơ sở dữ liệu Bệnh nhân/Người nhà/Bác sĩ/Thuốc và bổ sung vào ngữ cảnh.
         """
         if not user_message or not user_message.strip():
             return {
@@ -262,20 +320,20 @@ class ChatbotService:
         api_key = cls.get_api_key().strip()
         preferred_model = cls.get_model_name()
 
-        # 1. Tra cứu dữ liệu thực tế từ cơ sở dữ liệu
+        # 1. Tra cứu dữ liệu thực tế từ cơ sở dữ liệu (chỉ khi có ý định tra cứu rõ ràng)
         db_context = cls.search_database_entities(user_message)
 
-        # Kiểm tra xem khóa API đã được cấu hình hay chưa
+        # Nếu chưa cấu hình API Key hoặc Key giả định -> Trả về câu trả lời y tế chuyên sâu tự động
         if not api_key or api_key in ("YOUR_GEMINI_API_KEY", "your_gemini_api_key_here"):
             fallback_text = cls.get_smart_medical_fallback(user_message)
             return {
                 "success": True,
-                "reply": fallback_text + "\n\n*(ℹ️ Chế độ tư vấn y tế & Tra cứu tự động AI Care)*",
+                "reply": fallback_text,
                 "session_id": session_id,
                 "error": None
             }
 
-        # Xây dựng ngữ cảnh hội thoại từ history hoặc session
+        # Xây dựng ngữ cảnh hội thoại
         raw_context = []
         if history and isinstance(history, list) and len(history) > 0:
             for item in history:
@@ -289,7 +347,6 @@ class ChatbotService:
         elif session_id in cls._sessions:
             raw_context = list(cls._sessions[session_id])
 
-        # Tạo tin nhắn kèm dữ liệu tra cứu cơ sở dữ liệu nếu có
         user_prompt = user_message
         if db_context:
             user_prompt = f"{user_message}\n\n[DỮ LIỆU THỰC TẾ TRA CỨU TỪ CƠ SỞ DỮ LIỆU AI CARE]:\n{db_context}"
@@ -314,7 +371,7 @@ class ChatbotService:
             "generationConfig": {
                 "temperature": 0.7,
                 "topP": 0.95,
-                "maxOutputTokens": 1500,
+                "maxOutputTokens": 2048,
             }
         }
 
@@ -356,28 +413,19 @@ class ChatbotService:
                                 "error": None
                             }
 
-            except urllib.error.HTTPError:
-                fallback_text = cls.get_smart_medical_fallback(user_message)
-                return {
-                    "success": True,
-                    "reply": fallback_text + "\n\n*(ℹ️ Chế độ tư vấn & Tra cứu dữ liệu AI Care - Đã tối ưu tính sẵn sàng)*",
-                    "session_id": session_id,
-                    "error": None
-                }
+            except urllib.error.HTTPError as http_err:
+                print(f"[ChatbotService] Model '{model}' HTTP Error {http_err.code}: {http_err.reason}. Thử model tiếp theo...")
+                continue
 
-            except Exception:
-                fallback_text = cls.get_smart_medical_fallback(user_message)
-                return {
-                    "success": True,
-                    "reply": fallback_text + "\n\n*(ℹ️ Chế độ tư vấn & Tra cứu dữ liệu AI Care)*",
-                    "session_id": session_id,
-                    "error": None
-                }
+            except Exception as err:
+                print(f"[ChatbotService] Model '{model}' Error: {err}. Thử model tiếp theo...")
+                continue
 
+        # Nếu thử tất cả các model đều thất bại -> Trả về tư vấn y tế chuyên sâu tự động
         fallback_text = cls.get_smart_medical_fallback(user_message)
         return {
             "success": True,
-            "reply": fallback_text + "\n\n*(ℹ️ Chế độ tư vấn & Tra cứu dữ liệu AI Care)*",
+            "reply": fallback_text,
             "session_id": session_id,
             "error": None
         }

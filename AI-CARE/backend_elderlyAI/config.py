@@ -6,6 +6,7 @@
 # ==============================================================================
 
 import os
+from urllib.parse import quote_plus
 
 class Config:
     """
@@ -20,10 +21,12 @@ class Config:
     DB_HOST = os.getenv("DB_HOST", "localhost")
     DB_NAME = os.getenv("DB_NAME", "ElderlyCareAI")
 
+    encoded_password = quote_plus(DB_PASSWORD) if DB_PASSWORD else ""
+
     # Đường dẫn URI kết nối CSDL sử dụng PyMySQL làm driver
     SQLALCHEMY_DATABASE_URI = os.getenv(
         "SQLALCHEMY_DATABASE_URI",
-        f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}/{DB_NAME}"
+        f"mysql+pymysql://{DB_USER}:{encoded_password}@{DB_HOST}/{DB_NAME}"
     )
 
     # Tắt tính năng theo dõi biến đổi đối tượng của SQLAlchemy để tối ưu hiệu năng

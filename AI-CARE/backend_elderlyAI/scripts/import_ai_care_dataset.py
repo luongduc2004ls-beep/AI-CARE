@@ -20,7 +20,12 @@ from models.medicine_schedule import MedicineSchedule
 from models.notification import Notification
 from models.user import User
 
-DEFAULT_DATASET = BASE_DIR.parent / "AI_CARE_Database.xlsx"
+candidate_datasets = [
+    BASE_DIR.parent.parent / "AI_CARE_Database_Admin_User_1000.xlsx",
+    BASE_DIR.parent / "AI_CARE_Database_Admin_User_1000.xlsx",
+    BASE_DIR.parent / "AI_CARE_Database.xlsx"
+]
+DEFAULT_DATASET = next((p for p in candidate_datasets if p.exists()), BASE_DIR.parent / "AI_CARE_Database.xlsx")
 BATCH_SIZE = 500
 TAKEN_STATUS = "Đã uống"
 PENDING_STATUS = "Chưa uống"
