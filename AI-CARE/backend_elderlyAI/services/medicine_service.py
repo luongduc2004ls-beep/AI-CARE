@@ -91,8 +91,9 @@ def _schedule_sort_key(schedule):
 
 def _sorted_schedules(medicine):
 
+    schedules = getattr(medicine, "schedules", None) or []
     return sorted(
-        medicine.schedules or [],
+        schedules,
         key=_schedule_sort_key
     )
 
@@ -102,7 +103,7 @@ def _find_schedule_by_date(medicine, scheduled_date):
     if scheduled_date is None:
         return None
 
-    for schedule in medicine.schedules or []:
+    for schedule in getattr(medicine, "schedules", None) or []:
         if schedule.scheduled_date == scheduled_date:
             return schedule
 
@@ -197,18 +198,14 @@ class MedicineService:
     @staticmethod
     def get_all():
 
-        return Medicine.query.options(
-            selectinload(Medicine.schedules)
-        ).order_by(
+        return Medicine.query.order_by(
             Medicine.created_at.desc()
         ).all()
 
     @staticmethod
     def get_by_id(id):
 
-        return Medicine.query.options(
-            selectinload(Medicine.schedules)
-        ).filter(
+        return Medicine.query.filter(
             Medicine.medicine_id == id
         ).first()
 
@@ -318,20 +315,14 @@ class MedicineService:
         if medicine is None:
             return None
 
-        data = {
-            "status": status
-        }
-
-        if MedicineService.get_display_schedule(medicine) is None:
-            data["time"] = datetime.now().strftime("%H:%M")
-
-        if note is not None:
-            data["note"] = note
-
-        _sync_program_schedule(medicine, data)
+        today = date.today()
+        scheds = MedicineSchedule.query.filter_by(medicine_id=medicine.medicine_id, scheduled_date=today).all()
+        for s in scheds:
+            s.status = status
+            if note:
+                s.note = note
 
         db.session.commit()
-
         return medicine
 
     @staticmethod
@@ -351,9 +342,7 @@ class MedicineService:
     @staticmethod
     def search(keyword):
 
-        return Medicine.query.options(
-            selectinload(Medicine.schedules)
-        ).filter(
+        return Medicine.query.filter(
 
             or_(
 
@@ -370,9 +359,7 @@ class MedicineService:
     @staticmethod
     def low_stock():
 
-        return Medicine.query.options(
-            selectinload(Medicine.schedules)
-        ).filter(
+        return Medicine.query.filter(
 
             Medicine.quantity < 10
 
@@ -381,9 +368,7 @@ class MedicineService:
     @staticmethod
     def expired():
 
-        return Medicine.query.options(
-            selectinload(Medicine.schedules)
-        ).filter(
+        return Medicine.query.filter(
 
             Medicine.expire_date < datetime.today().date()
 

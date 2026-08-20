@@ -1,19 +1,181 @@
 // ==========================================================
 // medicineService.js
-// Service xử lý API quản lý thuốc / lịch uống thuốc
+// Service xử lý API quản lý kho dược và đơn thuốc phân lập theo bệnh nhân
 // Tương tác trực tiếp với Backend Flask API qua api.js (Axios)
 // ==========================================================
 
 import api from "./api";
 
 /**
- * Service quản lý đầy đủ các thao tác CRUD và truy vấn danh sách thuốc từ Backend.
+ * Service quản lý đầy đủ các thao tác Master Medicine Catalog và Patient-Specific Prescriptions.
  */
 const medicineService = {
+  // ========================================================
+  // 1. PATIENT-SPECIFIC ISOLATED MEDICATION METHODS
+  // ========================================================
+
   /**
-   * Lấy toàn bộ danh sách thuốc.
+   * Lấy toàn bộ đơn thuốc của một bệnh nhân cụ thể.
+   * Endpoint: GET /api/patients/:patientId/prescriptions
+   */
+  async getPatientPrescriptions(patientId) {
+    try {
+      const response = await api.get(`/patients/${patientId}/prescriptions`);
+      return response?.data || response;
+    } catch (error) {
+      console.error(`Lỗi khi lấy đơn thuốc của bệnh nhân ${patientId}:`, error.message);
+      throw error;
+    }
+  },
+
+  /**
+   * Lấy danh sách các loại thuốc thực tế đang được kê đơn cho một bệnh nhân.
+   * Endpoint: GET /api/patients/:patientId/medications
+   */
+  async getPatientMedications(patientId) {
+    try {
+      const response = await api.get(`/patients/${patientId}/medications`);
+      return response?.medications || response?.data?.medications || response?.data || [];
+    } catch (error) {
+      console.error(`Lỗi khi lấy danh sách thuốc của bệnh nhân ${patientId}:`, error.message);
+      throw error;
+    }
+  },
+
+  /**
+   * Lấy lịch uống thuốc theo ngày của một bệnh nhân cụ thể.
+   * Endpoint: GET /api/patients/:patientId/medications/schedule?date=YYYY-MM-DD
+   */
+  async getPatientSchedule(patientId, date = "") {
+    try {
+      const response = await api.get(`/patients/${patientId}/medications/schedule`, {
+        params: date ? { date } : {},
+      });
+      return response?.schedules || response?.data?.schedules || response?.data || [];
+    } catch (error) {
+      console.error(`Lỗi khi lấy lịch uống thuốc của bệnh nhân ${patientId}:`, error.message);
+      throw error;
+    }
+  },
+
+  /**
+   * Lấy lịch sử uống thuốc của một bệnh nhân.
+   * Endpoint: GET /api/patients/:patientId/medication-history
+   */
+  async getPatientHistory(patientId) {
+    try {
+      const response = await api.get(`/patients/${patientId}/medication-history`);
+      return response?.history || response?.data?.history || [];
+    } catch (error) {
+      console.error(`Lỗi khi lấy lịch sử uống thuốc của bệnh nhân ${patientId}:`, error.message);
+      throw error;
+    }
+  },
+
+  /**
+   * Tạo mới đơn thuốc cho bệnh nhân (Atomic Transaction).
+   * Endpoint: POST /api/patients/:patientId/prescriptions
+   */
+  async createPatientPrescription(patientId, prescriptionData) {
+    try {
+      const response = await api.post(`/patients/${patientId}/prescriptions`, prescriptionData);
+      return response?.data || response;
+    } catch (error) {
+      console.error(`Lỗi khi tạo đơn thuốc cho bệnh nhân ${patientId}:`, error.message);
+      throw error;
+    }
+  },
+
+  /**
+   * Ghi nhận bệnh nhân đã uống thuốc theo cữ thuốc hoặc mã chi tiết đơn thuốc (PrescriptionItem).
+   */
+  async takeMedicine(patientId, scheduleId, payload = { status: "Đã uống", taken_by: "Bệnh nhân" }) {
+    try {
+      const response = await api.post(`/patients/${patientId}/medications/schedule/${scheduleId}/take`, payload);
+      return response?.data || response;
+    } catch (error) {
+      console.error(`Lỗi khi ghi nhận uống thuốc lịch ${scheduleId}:`, error.message);
+      throw error;
+    }
+  },
+
+  /**
+   * Ghi nhận uống thuốc hoặc đổi trạng thái cữ thuốc trực tiếp theo PrescriptionItem.
+   * Endpoint: POST /api/prescription-items/:itemId/take
+   */
+  async takeMedicineByItem(itemId, status = "Đã uống", taken_by = "Người chăm sóc", note = null) {
+    try {
+      const response = await api.post(`/prescription-items/${itemId}/take`, { status, taken_by, note });
+      return response?.data || response;
+    } catch (error) {
+      console.error(`Lỗi khi ghi nhận uống thuốc theo đơn ${itemId}:`, error.message);
+      throw error;
+    }
+  },
+
+  /**
+   * Cập nhật chi tiết thuốc trong đơn (PrescriptionItem).
+   * Endpoint: PUT /api/prescription-items/:itemId
+   */
+  async updatePrescriptionItem(itemId, data) {
+    try {
+      const response = await api.put(`/prescription-items/${itemId}`, data);
+      return response?.data || response;
+    } catch (error) {
+      console.error(`Lỗi khi cập nhật thuốc trong đơn ${itemId}:`, error.message);
+      throw error;
+    }
+  },
+
+  /**
+   * Xóa một loại thuốc khỏi đơn (PrescriptionItem).
+   * Endpoint: DELETE /api/prescription-items/:itemId
+   */
+  async deletePrescriptionItem(itemId) {
+    try {
+      const response = await api.delete(`/prescription-items/${itemId}`);
+      return response?.data || response;
+    } catch (error) {
+      console.error(`Lỗi khi xóa thuốc khỏi đơn ${itemId}:`, error.message);
+      throw error;
+    }
+  },
+
+  /**
+   * Cập nhật lịch uống thuốc (Schedule).
+   * Endpoint: PUT /api/medication-schedules/:scheduleId
+   */
+  async updateSchedule(scheduleId, data) {
+    try {
+      const response = await api.put(`/medication-schedules/${scheduleId}`, data);
+      return response?.data || response;
+    } catch (error) {
+      console.error(`Lỗi khi cập nhật lịch uống ${scheduleId}:`, error.message);
+      throw error;
+    }
+  },
+
+  /**
+   * Xóa cữ uống thuốc (Schedule).
+   * Endpoint: DELETE /api/medication-schedules/:scheduleId
+   */
+  async deleteSchedule(scheduleId) {
+    try {
+      const response = await api.delete(`/medication-schedules/${scheduleId}`);
+      return response?.data || response;
+    } catch (error) {
+      console.error(`Lỗi khi xóa lịch uống ${scheduleId}:`, error.message);
+      throw error;
+    }
+  },
+
+  // ========================================================
+  // 2. MASTER MEDICINE CATALOG & COMPATIBILITY METHODS
+  // ========================================================
+
+  /**
+   * Lấy toàn bộ danh sách thuốc trong kho dược (Master Catalog).
    * Endpoint: GET /api/medicines
-   * @returns {Promise<Array>} Danh sách thuốc
    */
   async getAll() {
     try {
@@ -22,9 +184,9 @@ const medicineService = {
         ? response
         : Array.isArray(response?.data)
         ? response.data
-        : response?.data?.items || response?.items || [];
+        : response?.items || response?.data?.items || [];
     } catch (error) {
-      console.error("Lỗi khi lấy danh sách thuốc:", error.message);
+      console.error("Lỗi khi lấy danh sách kho dược:", error.message);
       throw error;
     }
   },
@@ -32,13 +194,11 @@ const medicineService = {
   /**
    * Lấy chi tiết thông tin thuốc theo ID.
    * Endpoint: GET /api/medicines/:id
-   * @param {number|string} id ID thuốc
-   * @returns {Promise<Object>} Chi tiết thuốc
    */
   async getById(id) {
     try {
       const response = await api.get(`/medicines/${id}`);
-      return response.data || null;
+      return response.data || response;
     } catch (error) {
       console.error(`Lỗi khi lấy thông tin thuốc ID ${id}:`, error.message);
       throw error;
@@ -46,37 +206,27 @@ const medicineService = {
   },
 
   /**
-   * Thêm mới thuốc vào cơ sở dữ liệu.
+   * Thêm mới thuốc vào kho dược master.
    * Endpoint: POST /api/medicines
-   * @param {Object} medicineData Dữ liệu thuốc mới
-   * @returns {Promise<Object>} Thông tin thuốc đã được tạo
    */
   async create(medicineData) {
     try {
       const response = await api.post("/medicines", medicineData);
-      return response.data;
+      return response.data || response;
     } catch (error) {
-      console.error("Lỗi khi thêm mới thuốc:", error.message);
+      console.error("Lỗi khi thêm mới thuốc kho dược:", error.message);
       throw error;
     }
   },
 
   /**
-   * Cập nhật thông tin thuốc theo ID.
+   * Cập nhật thông tin thuốc trong kho dược.
    * Endpoint: PUT /api/medicines/:id
-   * @param {number|string} id ID thuốc cần cập nhật
-   * @param {Object} medicineData Dữ liệu cập nhật
-   * @returns {Promise<Object>} Thông tin thuốc sau khi cập nhật
    */
   async update(id, medicineData) {
-    const payload = {
-      ...medicineData,
-      time: medicineData.time || medicineData.take_time || "08:00",
-      take_time: medicineData.time || medicineData.take_time || "08:00",
-    };
     try {
-      const response = await api.put(`/medicines/${id}`, payload);
-      return response.data;
+      const response = await api.put(`/medicines/${id}`, medicineData);
+      return response.data || response;
     } catch (error) {
       console.error(`Lỗi khi cập nhật thuốc ID ${id}:`, error.message);
       throw error;
@@ -84,10 +234,22 @@ const medicineService = {
   },
 
   /**
+   * Cập nhật trạng thái thuốc (Đã uống / Chưa uống).
+   * Endpoint: PATCH /api/medicines/:id/status
+   */
+  async updateStatus(id, status) {
+    try {
+      const response = await api.patch(`/medicines/${id}/status`, { status });
+      return response.data || response;
+    } catch (error) {
+      console.error(`Lỗi khi cập nhật trạng thái thuốc ID ${id}:`, error.message);
+      throw error;
+    }
+  },
+
+  /**
    * Xóa thuốc theo ID khỏi cơ sở dữ liệu.
    * Endpoint: DELETE /api/medicines/:id
-   * @param {number|string} id ID thuốc cần xóa
-   * @returns {Promise<Object>} Kết quả phản hồi từ API
    */
   async delete(id) {
     try {
@@ -100,10 +262,8 @@ const medicineService = {
   },
 
   /**
-   * Tìm kiếm thuốc theo từ khóa tên hoặc liều lượng.
+   * Tìm kiếm thuốc theo từ khóa trong kho dược.
    * Endpoint: GET /api/medicines/search?keyword=...
-   * @param {string} keyword Từ khóa tìm kiếm
-   * @returns {Promise<Array>} Danh sách kết quả tìm kiếm
    */
   async search(keyword = "") {
     try {
@@ -114,17 +274,16 @@ const medicineService = {
         ? response
         : Array.isArray(response?.data)
         ? response.data
-        : response?.data?.items || response?.items || [];
+        : response?.items || response?.data?.items || [];
     } catch (error) {
-      console.error("Lỗi khi tìm kiếm thuốc:", error.message);
+      console.error("Lỗi khi tìm kiếm kho dược:", error.message);
       throw error;
     }
   },
 
   /**
-   * Lấy danh sách các thuốc sắp hết (số lượng dưới ngưỡng).
+   * Lấy danh sách các thuốc sắp hết.
    * Endpoint: GET /api/medicines/low-stock
-   * @returns {Promise<Array>} Danh sách thuốc sắp hết
    */
   async getLowStock() {
     try {
@@ -133,7 +292,7 @@ const medicineService = {
         ? response
         : Array.isArray(response?.data)
         ? response.data
-        : response?.data?.items || response?.items || [];
+        : response?.items || response?.data?.items || [];
     } catch (error) {
       console.error("Lỗi khi lấy danh sách thuốc sắp hết:", error.message);
       throw error;
@@ -143,7 +302,6 @@ const medicineService = {
   /**
    * Lấy danh sách các thuốc đã hết hạn sử dụng.
    * Endpoint: GET /api/medicines/expired
-   * @returns {Promise<Array>} Danh sách thuốc hết hạn
    */
   async getExpired() {
     try {
@@ -152,7 +310,7 @@ const medicineService = {
         ? response
         : Array.isArray(response?.data)
         ? response.data
-        : response?.data?.items || response?.items || [];
+        : response?.items || response?.data?.items || [];
     } catch (error) {
       console.error("Lỗi khi lấy danh sách thuốc hết hạn:", error.message);
       throw error;

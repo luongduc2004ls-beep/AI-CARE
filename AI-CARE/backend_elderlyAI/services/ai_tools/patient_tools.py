@@ -126,21 +126,28 @@ def get_patient_full_profile(patient_id: str) -> Dict[str, Any]:
             "recorded_at": hr.recorded_at.strftime("%H:%M %d/%m/%Y") if hr and hr.recorded_at else "Hôm nay"
         }
 
-        # 2. Lịch thuốc hôm nay
-        today = date.today()
-        schedules = MedicineSchedule.query.filter_by(user_id=u_id, scheduled_date=today).all()
-        if not schedules:
-            schedules = MedicineSchedule.query.filter_by(scheduled_date=today).limit(3).all()
+        # 2. Đơn thuốc & Lịch uống của đúng bệnh nhân (Patient Isolation)
+        from services.patient_medication_service import PatientMedicationService
+        med_data = PatientMedicationService.get_patient_medications(u_id)
+        sched_data = PatientMedicationService.get_patient_medication_schedule(u_id, date.today())
 
-        med_list = [
-            {
-                "medicine_name": s.medicine.medicine_name if s.medicine else "Thuốc",
-                "dosage": s.medicine.dosage if s.medicine else "1 viên",
-                "time": s.take_time.strftime("%H:%M") if s.take_time else "08:00",
-                "status": s.status or "Chưa uống"
-            }
-            for s in schedules
-        ]
+        med_list = []
+        if sched_data and sched_data.get("schedules"):
+            for s in sched_data["schedules"]:
+                med_list.append({
+                    "medicine_name": s.get("medicine_name", "Thuốc"),
+                    "dosage": s.get("dosage", "1 viên"),
+                    "time": s.get("time", "08:00"),
+                    "status": s.get("status", "Chưa uống")
+                })
+        elif med_data and med_data.get("medications"):
+            for m in med_data["medications"]:
+                med_list.append({
+                    "medicine_name": m.get("medicine_name", "Thuốc"),
+                    "dosage": m.get("dosage", "1 viên"),
+                    "time": m.get("frequency", "Theo chỉ định"),
+                    "status": "Đang kê đơn"
+                })
 
         # 3. Camera trong phòng
         cams = Camera.query.filter(Camera.patient_id.in_([pat_code, f"PAT{u_id:05d}"])).all()
@@ -281,8 +288,18 @@ def search_patients_advanced(
             matched_user_ids = [r.user_id for r in hr_sub.with_entities(HealthRecord.user_id).distinct().all()]
             q = q.filter(User.user_id.in_(matched_user_ids))
 
-        # 10. Lọc theo Thuốc đang dùng / Trạng thái cữ thuốc (Medicine & Schedule JOIN)
+        # 10. Lọc theo Thuốc đang dùng / Trạng thái cữ thuốc (PrescriptionItems & MedicineSchedules)
         if medicine_name or medication_status:
+            from models.prescription import PrescriptionItem, Prescription
+            user_ids_from_rx = []
+            if medicine_name and medicine_name.strip():
+                rx_matches = db.session.query(Prescription.user_id)\
+                    .join(PrescriptionItem, Prescription.prescription_id == PrescriptionItem.prescription_id)\
+                    .join(Medicine, PrescriptionItem.medicine_id == Medicine.medicine_id)\
+                    .filter(Medicine.medicine_name.ilike(f"%{medicine_name.strip()}%"))\
+                    .distinct().all()
+                user_ids_from_rx = [r[0] for r in rx_matches]
+
             sched_sub = MedicineSchedule.query
             if medicine_name and medicine_name.strip():
                 sched_sub = sched_sub.join(Medicine, MedicineSchedule.medicine_id == Medicine.medicine_id)\
@@ -291,7 +308,8 @@ def search_patients_advanced(
                 sched_sub = sched_sub.filter(MedicineSchedule.status.ilike(f"%{medication_status.strip()}%"))
 
             sched_user_ids = [s.user_id for s in sched_sub.with_entities(MedicineSchedule.user_id).distinct().all()]
-            q = q.filter(User.user_id.in_(sched_user_ids))
+            combined_med_users = list(set(user_ids_from_rx + sched_user_ids)) if (medicine_name and not medication_status) else sched_user_ids
+            q = q.filter(User.user_id.in_(combined_med_users))
 
         # 11. Tính Tổng số bản ghi thực tế (Exact SQL COUNT)
         total_count = q.count()

@@ -60,6 +60,29 @@ INITIAL_KNOWLEDGE_CHUNKS = [
         )
     },
     {
+        "doc_id": "DOC_PHARMA_01",
+        "doc_title": "Dược Lý Lâm Sàng: Thuốc Tim Mạch & Huyết Áp",
+        "topic": "Thuốc Amlodipine & Điều trị Huyết áp",
+        "keywords": "amlodipine, amlodipin, thuốc hạ áp, chẹn kênh canxi, huyết áp, tác dụng phụ phù chân",
+        "content": (
+            "Amlodipine là thuốc hạ huyết áp thuộc nhóm chẹn kênh canxi thế hệ thứ hai (dihydropyridine). "
+            "Cơ chế: Làm giãn cơ trơn mạch máu ngoại vi, giảm sức cản ngoại biên, từ đó giúp hạ huyết áp và giảm đau thắt ngực. "
+            "Liều lượng thông thường: 5mg hoặc 10mg uống 1 lần/ngày. "
+            "Tác dụng phụ thường gặp: Phù nhẹ mắt cá chân, đỏ bừng mặt, đau đầu thoáng qua, chóng mặt. "
+            "Lưu ý: Không dừng thuốc đột ngột khi chưa có ý kiến của bác sĩ tim mạch."
+        )
+    },
+    {
+        "doc_id": "DOC_PHARMA_02",
+        "doc_title": "Dược Lý Lâm Sàng: Thuốc Mỡ Máu & Dạ Dày",
+        "topic": "Thuốc Atorvastatin & Omeprazole",
+        "keywords": "atorvastatin, omeprazole, mỡ máu, dạ dày, statin, ức chế bơm proton",
+        "content": (
+            "1. Atorvastatin: Thuốc nhóm statin giúp hạ mỡ máu (cholesterol LDL và triglycerid), phòng ngừa xơ vữa động mạch và đột quỵ. Uống vào buổi tối trước khi ngủ. "
+            "2. Omeprazole: Thuốc ức chế bơm proton (PPI) giúp giảm tiết acid dạ dày, điều trị viêm loét dạ dày - tá tràng và trào ngược dạ dày thực quản (GERD). Uống trước bữa ăn sáng 30 phút."
+        )
+    },
+    {
         "doc_id": "DOC_RED_FLAGS_01",
         "doc_title": "Dấu Hiệu Cảnh Báo Nguy Hiểm Cần Cấp Cứu Khẩn Cấp (Red Flags)",
         "topic": "Dấu hiệu cấp cứu, Đột quỵ, Nhồi máu cơ tim",
@@ -84,8 +107,8 @@ class MedicalKnowledgeService:
     def seed_knowledge_if_empty(cls):
         """Khởi tạo tài liệu tri thức mẫu nếu cơ sở dữ liệu chưa có"""
         try:
-            doc_count = MedicalDocument.query.count()
-            if doc_count == 0:
+            doc = MedicalDocument.query.filter_by(document_id="DOC_GERIATRIC_CORE_01").first()
+            if not doc:
                 doc = MedicalDocument(
                     document_id="DOC_GERIATRIC_CORE_01",
                     title="Cẩm Nang Y Học Lão Khoa & Chăm Sóc Người Cao Tuổi Toàn Diện",
@@ -96,16 +119,23 @@ class MedicalKnowledgeService:
                 db.session.add(doc)
                 db.session.flush()
 
-                for idx, chunk in enumerate(INITIAL_KNOWLEDGE_CHUNKS):
+            for idx, chunk in enumerate(INITIAL_KNOWLEDGE_CHUNKS):
+                chk_id = f"CHK_{idx+1:03d}"
+                existing = MedicalChunk.query.filter_by(chunk_id=chk_id).first()
+                if not existing:
                     c = MedicalChunk(
-                        chunk_id=f"CHK_{idx+1:03d}",
+                        chunk_id=chk_id,
                         document_id=doc.document_id,
                         topic=chunk["topic"],
                         keywords=chunk["keywords"],
                         content=chunk["content"]
                     )
                     db.session.add(c)
-                db.session.commit()
+                else:
+                    existing.topic = chunk["topic"]
+                    existing.keywords = chunk["keywords"]
+                    existing.content = chunk["content"]
+            db.session.commit()
         except Exception:
             db.session.rollback()
 

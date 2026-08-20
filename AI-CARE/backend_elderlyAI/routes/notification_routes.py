@@ -12,9 +12,19 @@ notification_bp = Blueprint("notification", __name__)
 
 
 @notification_bp.route("/notifications", methods=["GET"])
+@notification_bp.route("/alerts", methods=["GET"])
 def list_notifications():
-    """Lấy danh sách tất cả thông báo và lịch sử cảnh báo"""
-    data = get_all_notifications()
+    """Lấy danh sách thông báo và cảnh báo theo phân quyền Role & Bệnh nhân"""
+    user_id = request.headers.get("X-User-Id", request.args.get("userId"))
+    user_role = request.headers.get("X-User-Role", request.args.get("userRole", "Admin"))
+    patient_id = request.args.get("patient_id") or request.args.get("patientId")
+    limit = request.args.get("limit", 100, type=int)
+
+    # Nếu gọi qua route /my/alerts thì mặc định role là User
+    if request.path.endswith("/my/alerts"):
+        user_role = user_role or "User"
+
+    data = get_all_notifications(user_id=user_id, user_role=user_role, patient_id=patient_id, limit=limit)
     return jsonify({
         "success": True,
         "total": len(data),
@@ -35,8 +45,13 @@ def new_notification():
 
 @notification_bp.route("/notifications/history", methods=["GET"])
 def notification_history():
-    """Lấy lịch sử tất cả các cảnh báo đã từng xuất hiện"""
-    data = get_all_notifications()
+    """Lấy lịch sử tất cả các cảnh báo đã từng xuất hiện theo phân quyền"""
+    user_id = request.headers.get("X-User-Id", request.args.get("userId"))
+    user_role = request.headers.get("X-User-Role", request.args.get("userRole", "Admin"))
+    patient_id = request.args.get("patient_id") or request.args.get("patientId")
+    limit = request.args.get("limit", 100, type=int)
+
+    data = get_all_notifications(user_id=user_id, user_role=user_role, patient_id=patient_id, limit=limit)
     return jsonify({
         "success": True,
         "total": len(data),
@@ -46,8 +61,13 @@ def notification_history():
 
 @notification_bp.route("/notifications/unread", methods=["GET"])
 def unread_notifications():
-    """Lấy các cảnh báo chưa đọc"""
-    data = get_unread_notifications()
+    """Lấy các cảnh báo chưa đọc theo phân quyền"""
+    user_id = request.headers.get("X-User-Id", request.args.get("userId"))
+    user_role = request.headers.get("X-User-Role", request.args.get("userRole", "Admin"))
+    patient_id = request.args.get("patient_id") or request.args.get("patientId")
+    limit = request.args.get("limit", 100, type=int)
+
+    data = get_unread_notifications(user_id=user_id, user_role=user_role, patient_id=patient_id, limit=limit)
     return jsonify({
         "success": True,
         "total": len(data),
@@ -57,8 +77,12 @@ def unread_notifications():
 
 @notification_bp.route("/notifications/unread-count", methods=["GET"])
 def unread_count():
-    """Đếm số lượng cảnh báo chưa đọc"""
-    data = get_unread_notifications()
+    """Đếm số lượng cảnh báo chưa đọc theo phân quyền"""
+    user_id = request.headers.get("X-User-Id", request.args.get("userId"))
+    user_role = request.headers.get("X-User-Role", request.args.get("userRole", "Admin"))
+    patient_id = request.args.get("patient_id") or request.args.get("patientId")
+
+    data = get_unread_notifications(user_id=user_id, user_role=user_role, patient_id=patient_id)
     return jsonify({
         "success": True,
         "unread_count": len(data)

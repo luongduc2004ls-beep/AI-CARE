@@ -76,7 +76,50 @@ class AIIntentRouter:
                 "raw_query": msg
             }
 
-        # 4. Phân loại tra cứu Thuốc đang dùng (Medicine Search)
+        # 4. Phân loại tra cứu Kiến thức Y khoa về Thuốc (Medical Knowledge vs Patient DB)
+        is_med_knowledge = any(k in q_norm for k in [
+            "la thuoc gi", "la gi", "dung de lam gi", "tac dung cua", "tac dung phu", "chi dinh cua",
+            "huong dan su dung", "cong dung cua", "uong the nao", "lieu luong cua"
+        ])
+        if is_med_knowledge and any(m[0] in q_norm for m in [("amlodipine", "Amlodipine"), ("omeprazole", "Omeprazole"), ("atorvastatin", "Atorvastatin"), ("losartan", "Losartan"), ("metformin", "Metformin")]):
+            return {
+                "intent": "MEDICAL_KNOWLEDGE",
+                "topic": "MEDICATION_GUIDE",
+                "raw_query": msg
+            }
+
+        # 4.1 Phân loại tra cứu Thuốc của một Bệnh nhân Cụ Thể (Patient Specific Medication Query)
+        med_patient_patterns = [
+            r"uong.*thuoc",
+            r"dung.*thuoc",
+            r"don.*thuoc",
+            r"lich.*uong",
+            r"danh sach.*thuoc",
+            r"thuoc.*cua",
+            r"cac loai thuoc",
+            r"nhung thuoc",
+            r"thuoc nao",
+            r"thuoc gi",
+            r"uong thuoc",
+            r"dung thuoc",
+            r"ke don"
+        ]
+        if any(re.search(p, q_norm) for p in med_patient_patterns):
+            # Extract name or code
+            pat_match = re.search(r"(PAT\d{4,5})", msg, re.IGNORECASE)
+            name_candidate = None
+            if pat_match:
+                name_candidate = pat_match.group(1).upper()
+            else:
+                name_candidate = re.sub(r"(?:uống những thuốc gì|uống thuốc gì|đang uống thuốc gì|dùng thuốc gì|đơn thuốc của|lịch uống thuốc của|thuốc của|các loại thuốc|bệnh nhân|cụ|ông|bà|[?!.,;:])\s*", "", msg, flags=re.IGNORECASE).strip()
+                name_candidate = name_candidate.strip("?!.,;: \n\r\t")
+            return {
+                "intent": "PATIENT_MEDICATION_QUERY",
+                "patient_identifier": name_candidate or None,
+                "raw_query": msg
+            }
+
+        # 4.2 Phân loại tra cứu Thuốc đang dùng (Medicine Search)
         known_medicines = [
             ("amlodipine", "Amlodipine"),
             ("omeprazole", "Omeprazole"),

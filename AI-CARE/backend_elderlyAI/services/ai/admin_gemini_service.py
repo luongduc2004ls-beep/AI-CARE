@@ -9,7 +9,7 @@ import re
 import json
 import urllib.request
 import urllib.error
-from datetime import datetime
+from datetime import datetime, date
 from config import Config
 from database import db
 from models.conversation import Conversation, Message
@@ -286,7 +286,7 @@ class AdminGeminiService:
         target_pid = parsed_intent.get("patient_id")
 
         # 1. Tra cứu thông tin hồ sơ bệnh nhân cụ thể (PATxxxxx)
-        if intent in ["PATIENT_PROFILE", "HEALTH_QUERY", "MEDICINE_QUERY", "CAMERA_QUERY", "FALL_QUERY"] and target_pid:
+        if intent in ["PATIENT_PROFILE", "HEALTH_QUERY", "CAMERA_QUERY", "FALL_QUERY"] and target_pid:
             full_prof = get_patient_full_profile(target_pid)
             if not full_prof.get("found"):
                 return f"### ❌ KHÔNG TÌM THẤY DỮ LIỆU\n\nKhông tìm thấy bệnh nhân có mã hoặc tên **'{target_pid}'** trong cơ sở dữ liệu hiện tại."
@@ -311,11 +311,55 @@ class AdminGeminiService:
                 f"- **Huyết áp**: **{vitals.get('blood_pressure')} mmHg** | **Nhịp tim**: **{vitals.get('heart_rate')} BPM**\n"
                 f"- **SpO₂**: **{vitals.get('spo2')}%** | **Thân nhiệt**: **{vitals.get('temperature')}°C**\n"
                 f"- **Đánh giá rủi ro**: `{vitals.get('risk_level')}`\n\n"
-                f"### 💊 LỊCH THUỐC HÔM NAY\n{meds_str}\n\n"
-                f"### 📹 CAMERA & CẢNH BÁO\n"
                 f"- **Camera phòng**: {cams_str}\n"
                 f"- **Sự cố gần đây**: {alerts_str}"
             )
+        # 1.1 Tra cứu Thuốc & Đơn thuốc của một Bệnh nhân Cụ Thể (Patient Medication Isolation)
+        if intent in ["PATIENT_MEDICATION_QUERY", "MEDICINE_QUERY"]:
+            pat_ident = target_pid or parsed_intent.get("patient_identifier", "PAT10000")
+            from services.patient_medication_service import PatientMedicationService
+            med_res = PatientMedicationService.get_patient_medications(pat_ident)
+            rx_res = PatientMedicationService.get_patient_prescriptions(pat_ident)
+            sched_res = PatientMedicationService.get_patient_medication_schedule(pat_ident, date.today())
+
+            if not med_res or not med_res.get("patient"):
+                return f"### ❌ KHÔNG TÌM THẤY DỮ LIỆU\n\nKhông tìm thấy thông tin đơn thuốc của bệnh nhân **'{pat_ident}'** trong cơ sở dữ liệu."
+
+            pat = med_res["patient"]
+            meds = med_res.get("medications", [])
+            rxs = rx_res.get("prescriptions", []) if rx_res else []
+            scheds = sched_res.get("schedules", []) if sched_res else []
+
+            rx_str = ""
+            for rx in rxs:
+                rx_str += f"- **Đơn thuốc**: `{rx.get('prescription_code')}` • Chẩn đoán: **{rx.get('diagnosis')}** • Bác sĩ: {rx.get('doctor_name')} (Trạng thái: `{rx.get('status')}`)\n"
+
+            meds_str = ""
+            for idx, m in enumerate(meds):
+                meds_str += f"{idx+1}. **{m.get('medicine_name')}** — Liều: **{m.get('dosage')}** • Tần suất: **{m.get('frequency')}** • Hướng dẫn: *{m.get('instruction')}*\n"
+
+            scheds_str = ""
+            for s in scheds:
+                scheds_str += f"- Cữ **{s.get('time')}**: **{s.get('medicine_name')}** ({s.get('dosage')}) — Trạng thái: `{s.get('status')}`\n"
+
+            return (
+                f"### 💊 ĐƠN THUỐC & LỊCH UỐNG: {pat.get('full_name')} ({pat.get('patient_code')})\n\n"
+                f"#### 📋 Thông tin Đơn thuốc:\n{rx_str or '- Chưa có đơn thuốc chính thức'}\n"
+                f"#### 🧪 Thuốc Kê Đơn Thực Tế ({len(meds)} loại):\n{meds_str or '- Chưa có thuốc được chỉ định'}\n"
+                f"#### ⏰ Lịch Uống Hôm Nay:\n{scheds_str or '- Không có cữ uống thuốc hôm nay'}\n\n"
+                f"📌 *Dữ liệu được trích xuất trực tiếp từ CSDL Đơn thuốc phân lập (Prescriptions & PrescriptionItems).*"
+            )
+        # 1.2 Tra cứu Tri thức Y khoa & Dược lý Lâm sàng (RAG Medical Knowledge Layer)
+        if intent == "MEDICAL_KNOWLEDGE":
+            from services.ai.medical_knowledge_service import MedicalKnowledgeService
+            chunks = MedicalKnowledgeService.search_medical_knowledge(query, top_k=3)
+            if chunks:
+                combined_docs = "\n\n".join([f"- {c}" if isinstance(c, str) else f"#### 📖 {c.get('topic', 'Y khoa')}:\n{c.get('content')}" for c in chunks])
+                return (
+                    f"### 📚 HƯỚNG DẪN DƯỢC LÝ & Y KHOA LÂM SÀNG\n\n"
+                    f"{combined_docs}\n\n"
+                    f"📌 *Nguồn tham khảo: Hướng dẫn Dược lý Lâm sàng & Phác đồ Điều trị Lão khoa Chuẩn 2026.*"
+                )
 
         # 2. Tra cứu Dị ứng (Allergy Search / Filter)
         if intent == "PATIENT_FILTER" and parsed_intent.get("filter_type") == "ALLERGY":

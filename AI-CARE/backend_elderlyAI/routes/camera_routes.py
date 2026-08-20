@@ -80,10 +80,9 @@ def list_my_cameras():
 # ALERT MANAGEMENT & LIFECYCLE ENDPOINTS
 # ==========================================================
 
-@camera_bp.route("/admin/alerts", methods=["GET"])
 @camera_bp.route("/cameras/alerts", methods=["GET"])
-def list_admin_alerts():
-    """Lấy danh sách tất cả các cảnh báo hệ thống"""
+def list_camera_alerts():
+    """Lấy danh sách tất cả các cảnh báo sự cố từ camera"""
     role = request.headers.get("X-User-Role", request.args.get("userRole", "Admin"))
     user_id = request.headers.get("X-User-Id", request.args.get("userId"))
     status = request.args.get("status")
@@ -95,21 +94,6 @@ def list_admin_alerts():
     }), 200
 
 
-@camera_bp.route("/my/alerts", methods=["GET"])
-def list_my_alerts():
-    """Lấy danh sách cảnh báo thuộc về người thân gia đình"""
-    role = request.headers.get("X-User-Role", request.args.get("userRole", "User"))
-    user_id = request.headers.get("X-User-Id", request.args.get("userId"))
-    status = request.args.get("status")
-    alerts = AlertService.get_alerts(user_role=role, user_id=user_id, status=status)
-    return jsonify({
-        "success": True,
-        "total": len(alerts),
-        "data": alerts
-    }), 200
-
-
-@camera_bp.route("/admin/alerts/<int:alert_id>/acknowledge", methods=["POST"])
 @camera_bp.route("/cameras/alerts/<int:alert_id>/acknowledge", methods=["POST"])
 def acknowledge_alert_route(alert_id):
     """Xác nhận đã tiếp nhận cảnh báo (Chuyển trạng thái sang ACKNOWLEDGED)"""
@@ -121,7 +105,6 @@ def acknowledge_alert_route(alert_id):
     return jsonify({"success": True, "data": res}), 200
 
 
-@camera_bp.route("/admin/alerts/<int:alert_id>/resolve", methods=["POST"])
 @camera_bp.route("/cameras/alerts/<int:alert_id>/resolve", methods=["POST"])
 def resolve_alert_route(alert_id):
     """Xử lý hoàn tất cảnh báo (Chuyển trạng thái sang RESOLVED)"""

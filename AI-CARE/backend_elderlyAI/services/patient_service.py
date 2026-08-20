@@ -22,7 +22,7 @@ def _resolve_user(id_or_code):
             return None
 
     # Thử tìm theo patient_code dạng chuỗi
-    code_str = str(id_or_code).strip()
+    code_str = str(id_or_code).strip("?!.,;: \n\r\t")
     user = User.query.filter(
         User.patient_code.ilike(code_str),
         or_(User.is_active.is_(True), User.is_active.is_(None))

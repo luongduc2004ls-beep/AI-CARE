@@ -9,7 +9,7 @@ import re
 import json
 import urllib.request
 import urllib.error
-from datetime import datetime
+from datetime import datetime, date
 from config import Config
 from database import db
 from models.conversation import Conversation, Message
@@ -127,7 +127,20 @@ class UserGeminiService:
     @classmethod
     def process_chat(cls, user_message: str, conversation_id: str, patient_id: str, user_id: int = None, user_role: str = "User", history: list = None) -> dict:
         parsed_intent = AIIntentRouter.detect_intent(user_message)
-        effective_patient_id = parsed_intent.get("patient_id") or patient_id
+        cand_id = parsed_intent.get("patient_id") or parsed_intent.get("patient_identifier")
+        effective_patient_id = patient_id
+        if cand_id:
+            u = User.query.filter((User.patient_code == cand_id) | (User.full_name == cand_id)).first()
+            if not u:
+                u = User.query.filter(User.full_name.ilike(cand_id)).first()
+            if not u and not patient_id:
+                u = User.query.filter(User.full_name.ilike(f"%{cand_id}%")).first()
+
+            if u and (not patient_id or cand_id.startswith("PAT") or u.full_name == cand_id):
+                effective_patient_id = u.patient_code or str(u.user_id)
+
+        if not effective_patient_id:
+            effective_patient_id = "PAT10000"
 
         # 1. Kiểm tra xác thực quyền truy cập đối với patient_id
         is_allowed = AuthPermissionService.validate_patient_access(user_id, user_role, effective_patient_id)
@@ -307,14 +320,43 @@ class UserGeminiService:
                 f"### ⚠️ LƯU Ý Y TẾ\n"
                 f"Nếu cụ xuất hiện nôn ói nhiều, đau bụng dữ dội từng cơn, sốt hoặc không đi ngoài được, gia đình hãy đưa cụ đi khám bác sĩ ngay."
             )
-        elif intent == "MEDICINE_QUERY":
+        elif intent in ["PATIENT_MEDICATION_QUERY", "MEDICINE_QUERY"]:
+            from services.patient_medication_service import PatientMedicationService
+            med_res = PatientMedicationService.get_patient_medications(patient_id)
+            sched_res = PatientMedicationService.get_patient_medication_schedule(patient_id, date.today())
+            rx_res = PatientMedicationService.get_patient_prescriptions(patient_id)
+
+            meds = med_res.get("medications", []) if med_res else []
+            scheds = sched_res.get("schedules", []) if sched_res else []
+            rxs = rx_res.get("prescriptions", []) if rx_res else []
+
+            if not meds and not scheds:
+                return (
+                    f"### 💊 ĐƠN THUỐC & LỊCH UỐNG: {p_name.upper()}\n\n"
+                    f"Hiện tại trong cơ sở dữ liệu chưa có đơn thuốc kê đơn chính thức cho {p_name}."
+                )
+
+            meds_str = ""
+            for idx, m in enumerate(meds):
+                status_icon = "🟢" if m.get("status") == "Đã uống" else "🟡"
+                meds_str += f"{idx+1}. **{m.get('name')}** ({m.get('dosage')}) — Tần suất: `{m.get('frequency')}` • Trạng thái: {status_icon} `{m.get('status')}` • Hướng dẫn: *{m.get('instruction')}*\n"
+
+            scheds_str = ""
+            for s in scheds:
+                s_icon = "🟢" if s.get("status") == "Đã uống" else "🟡"
+                scheds_str += f"- Cữ **{s.get('time')}**: **{s.get('medicine_name')}** ({s.get('dosage')}) — {s_icon} `{s.get('status')}`\n"
+
+            rx_str = ""
+            if rxs:
+                rx_first = rxs[0]
+                rx_str = f"- **Mã đơn**: `{rx_first.get('prescription_code')}` • Chẩn đoán: **{rx_first.get('diagnosis')}** • Bác sĩ điều trị: {rx_first.get('doctor_name')}\n\n"
+
             return (
-                f"### 💊 LỊCH UỐNG THUỐC HÔM NAY CỦA {p_name.upper()}\n"
-                f"- **Cữ Sáng (08:00)**: 🟢 **Đã uống đúng giờ** (Amlodipine 5mg - Hạ áp)\n"
-                f"- **Cữ Chiều (14:00)**: 🟢 **Đã uống** (Vitamin B-Complex)\n"
-                f"- **Cữ Tối (20:00)**: 🟡 **Chưa uống** (Atorvastatin 10mg - Mỡ máu)\n\n"
-                f"### 📌 NHẮC NHỞ GIA ĐÌNH\n"
-                f"Hệ thống sẽ tự động phát chuông nhắc nhở vào lúc 20:00 tối nay. Gia đình vui lòng kiểm tra cụ đã uống thuốc sau khi ăn tối nhé."
+                f"### 💊 ĐƠN THUỐC & LỊCH UỐNG: {p_name.upper()} ({patient_id})\n\n"
+                f"{rx_str}"
+                f"#### 🧪 Danh Sách Thuốc Đang Dùng ({len(meds)} loại):\n{meds_str}\n"
+                f"#### ⏰ Lịch Uống Thuốc Hôm Nay:\n{scheds_str or '- Không có cữ uống thuốc riêng lẻ'}\n\n"
+                f"📌 *Dữ liệu được trích xuất trực tiếp từ CSDL Hồ sơ Bệnh nhân.*"
             )
         elif intent == "CAMERA_QUERY":
             return (

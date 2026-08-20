@@ -1,7 +1,7 @@
 // ==========================================================
 // MedicineTable.jsx
 // Quản lý và hiển thị danh sách thuốc từ Backend API Flask
-// Tương tác trực tiếp với MySQL qua medicineService
+// Tương tác trực tiếp với Cơ sở dữ liệu qua medicineService (100% Real Database)
 // ==========================================================
 
 import { useCallback, useEffect, useState } from "react";
@@ -18,21 +18,25 @@ const normalizeMedicine = (med) => {
   if (!med) return null;
   return {
     ...med,
-    id: med.medicine_id || med.id,
+    id: med.prescription_item_id || med.medicine_id || med.id,
     medicine_id: med.medicine_id || med.id,
+    prescription_item_id: med.prescription_item_id,
+    prescription_id: med.prescription_id,
     name: med.medicine_name || med.name || "",
-    dosage: med.dosage || "",
+    dosage: med.dosage || "1 viên",
     time: med.frequency || med.time || "08:00",
     status: med.status || "Chưa uống",
     quantity: med.quantity !== undefined ? med.quantity : 10,
-    expire_date: med.expire_date || "",
-    patient_name: med.patient_name || med.user_name || ""
+    expire_date: med.expire_date || med.end_date || "",
+    patient_name: med.patient_name || med.full_name || "",
+    instruction: med.instruction || "",
   };
 };
 
-function MedicineTable({ addActivity }) {
+function MedicineTable({ addActivity, patientId }) {
   const { currentUser } = useAuth();
   const isAdmin = currentUser?.role === "Admin";
+  const activePatientId = patientId || currentUser?.patient_code || "PAT10000";
 
   const [medicines, setMedicines] = useState([]);
   const [showModal, setShowModal] = useState(false);
@@ -43,9 +47,8 @@ function MedicineTable({ addActivity }) {
   const [error, setError] = useState(null);
 
   // ============================
-  // Tải danh sách thuốc từ Backend API
+  // Tải danh sách thuốc từ Backend API (100% Real DB)
   // ============================
-
   const loadMedicines = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -53,27 +56,31 @@ function MedicineTable({ addActivity }) {
       let data = [];
       if (search.trim()) {
         data = await medicineService.search(search.trim());
-      } else {
+      } else if (isAdmin && !patientId) {
         data = await medicineService.getAll();
+      } else {
+        data = await medicineService.getPatientMedications(activePatientId);
       }
-      const normalized = (data || []).map(normalizeMedicine);
+      const normalized = (data || []).map(normalizeMedicine).filter(Boolean);
       setMedicines(normalized);
     } catch (err) {
       console.error("Lỗi khi tải danh sách thuốc:", err);
-      setError(err.message || "Không thể tải danh sách thuốc từ cơ sở dữ liệu.");
+      setError(err.message || "Không thể tải danh sách thuốc từ máy chủ Backend.");
     } finally {
       setLoading(false);
     }
-  }, [search]);
+  }, [search, isAdmin, patientId, activePatientId]);
 
   useEffect(() => {
-    loadMedicines();
+    const timer = setTimeout(() => {
+      loadMedicines();
+    }, 200);
+    return () => clearTimeout(timer);
   }, [loadMedicines]);
 
   // ============================
   // Xử lý Modal
   // ============================
-
   const handleOpen = () => {
     setSelectedMedicine(null);
     setShowModal(true);
@@ -90,24 +97,42 @@ function MedicineTable({ addActivity }) {
   };
 
   // ============================
-  // Thao tác CRUD kết nối Flask API & MySQL
+  // Thao tác CRUD kết nối Flask API & CSDL
   // ============================
-
   const createMedicine = async (medicineData) => {
     setLoading(true);
     try {
-      const payload = {
-        medicine_name: (medicineData.name || medicineData.medicine_name || "").trim(),
-        dosage: medicineData.dosage || "1 viên",
-        frequency: medicineData.time || medicineData.frequency || "08:00",
-        quantity: medicineData.quantity ? parseInt(medicineData.quantity, 10) : 10,
-        expire_date: medicineData.expire_date || "2026-12-31",
-        note: medicineData.note || "",
-      };
+      if (isAdmin && !patientId) {
+        const payload = {
+          medicine_name: (medicineData.name || medicineData.medicine_name || "").trim(),
+          dosage: medicineData.dosage || "1 viên",
+          frequency: medicineData.time || medicineData.frequency || "08:00",
+          quantity: medicineData.quantity ? parseInt(medicineData.quantity, 10) : 10,
+          expire_date: medicineData.expire_date || "2026-12-31",
+          instruction: medicineData.instruction || medicineData.note || "",
+        };
+        await medicineService.create(payload);
+      } else {
+        // Tạo đơn thuốc cho bệnh nhân cụ thể
+        const payload = {
+          doctor_name: currentUser?.full_name || "BS. Điều trị",
+          diagnosis: "Kê đơn điều trị",
+          items: [
+            {
+              medicine_name: (medicineData.name || medicineData.medicine_name || "").trim(),
+              dosage: medicineData.dosage || "1 viên",
+              frequency: medicineData.time || medicineData.frequency || "08:00",
+              quantity: medicineData.quantity ? parseInt(medicineData.quantity, 10) : 30,
+              instruction: medicineData.instruction || medicineData.note || "Uống sau ăn",
+              times: [medicineData.time || "08:00"],
+            },
+          ],
+        };
+        await medicineService.createPatientPrescription(activePatientId, payload);
+      }
 
-      await medicineService.create(payload);
       alert("Thêm mới thuốc thành công!");
-      if (addActivity) addActivity("add", payload.medicine_name);
+      if (addActivity) addActivity("add", medicineData.name || medicineData.medicine_name);
       handleClose();
       await loadMedicines();
     } catch (err) {
@@ -118,22 +143,32 @@ function MedicineTable({ addActivity }) {
     }
   };
 
-  const updateMedicine = async (updatedMedicineData) => {
+  const updateMedicine = async (updatedData) => {
     setLoading(true);
     try {
-      const targetId = updatedMedicineData.medicine_id || updatedMedicineData.id;
-      const payload = {
-        medicine_name: (updatedMedicineData.name || updatedMedicineData.medicine_name || "").trim(),
-        dosage: updatedMedicineData.dosage || "1 viên",
-        frequency: updatedMedicineData.time || updatedMedicineData.frequency || "08:00",
-        quantity: updatedMedicineData.quantity ? parseInt(updatedMedicineData.quantity, 10) : 10,
-        expire_date: updatedMedicineData.expire_date || "2026-12-31",
-        note: updatedMedicineData.note || "",
-      };
+      if (updatedData.prescription_item_id) {
+        // Sửa chi tiết thuốc trong đơn bệnh nhân
+        await medicineService.updatePrescriptionItem(updatedData.prescription_item_id, {
+          dosage: updatedData.dosage || "1 viên",
+          frequency: updatedData.time || updatedData.frequency || "1 lần/ngày",
+          quantity: updatedData.quantity ? parseInt(updatedData.quantity, 10) : 30,
+          instruction: updatedData.instruction || updatedData.note || "",
+        });
+      } else {
+        // Sửa kho dược
+        const targetId = updatedData.medicine_id || updatedData.id;
+        await medicineService.update(targetId, {
+          medicine_name: (updatedData.name || updatedData.medicine_name || "").trim(),
+          dosage: updatedData.dosage || "1 viên",
+          frequency: updatedData.time || updatedData.frequency || "08:00",
+          quantity: updatedData.quantity ? parseInt(updatedData.quantity, 10) : 10,
+          expire_date: updatedData.expire_date || "2026-12-31",
+          instruction: updatedData.instruction || updatedData.note || "",
+        });
+      }
 
-      await medicineService.update(targetId, payload);
       alert("Cập nhật thông tin thuốc thành công!");
-      if (addActivity) addActivity("edit", payload.medicine_name);
+      if (addActivity) addActivity("edit", updatedData.name || updatedData.medicine_name);
       handleClose();
       await loadMedicines();
     } catch (err) {
@@ -145,14 +180,18 @@ function MedicineTable({ addActivity }) {
   };
 
   const handleDelete = async (id) => {
-    const targetMed = medicines.find((item) => (item.medicine_id || item.id) === id);
+    const targetMed = medicines.find((item) => (item.prescription_item_id || item.medicine_id || item.id) === id);
     const medName = targetMed?.name || "loại thuốc này";
 
     if (!window.confirm(`Bạn có chắc muốn xóa "${medName}"?`)) return;
 
     setLoading(true);
     try {
-      await medicineService.delete(id);
+      if (targetMed?.prescription_item_id) {
+        await medicineService.deletePrescriptionItem(targetMed.prescription_item_id);
+      } else {
+        await medicineService.delete(id);
+      }
       alert(`Đã xóa thành công "${medName}"!`);
       await loadMedicines();
     } catch (err) {
@@ -164,114 +203,47 @@ function MedicineTable({ addActivity }) {
   };
 
   const handleToggleStatus = async (id) => {
-    const medicineToMark = medicines.find((item) => (item.medicine_id || item.id) === id);
-    if (!medicineToMark) return;
+    const targetMed = medicines.find((item) => (item.prescription_item_id || item.medicine_id || item.id) === id);
+    if (!targetMed) return;
 
-    const newStatus = medicineToMark.status === "Đã uống" ? "Chưa uống" : "Đã uống";
+    const newStatus = targetMed.status === "Đã uống" ? "Chưa uống" : "Đã uống";
 
+    // Optimistic UI update
     setMedicines((prev) =>
       prev.map((item) =>
-        (item.medicine_id || item.id) === id ? { ...item, status: newStatus } : item
+        (item.prescription_item_id || item.medicine_id || item.id) === id ? { ...item, status: newStatus } : item
       )
     );
 
     try {
-      await medicineService.updateStatus(id, newStatus);
+      if (targetMed.prescription_item_id) {
+        await medicineService.takeMedicineByItem(
+          targetMed.prescription_item_id,
+          newStatus,
+          currentUser?.full_name || "Người chăm sóc"
+        );
+      } else if (targetMed.schedule_id) {
+        await medicineService.takeMedicine(activePatientId, targetMed.schedule_id, {
+          status: newStatus,
+          taken_by: currentUser?.full_name || "Người chăm sóc",
+        });
+      } else {
+        await medicineService.updateStatus(targetMed.medicine_id || id, newStatus);
+      }
     } catch (err) {
       console.error("Không thể lưu trạng thái thuốc lên máy chủ:", err);
+      alert(err.message || "Không thể cập nhật trạng thái uống thuốc.");
+      await loadMedicines();
     }
 
-    if (addActivity) addActivity("taken", medicineToMark.name);
+    if (addActivity) addActivity("taken", targetMed.name);
   };
 
-  const addMedicine = createMedicine;
-  const editMedicine = handleEdit;
-  const deleteMedicine = handleDelete;
-  const markAsTaken = handleToggleStatus;
-
-  // ============================
-  // Lọc & Sắp xếp danh sách đơn thuốc cá nhân vs Admin
-  // ============================
-  const DEFAULT_PERSONAL_SCHEDULE = [
-    {
-      id: "p_1",
-      medicine_id: "p_1",
-      name: "Amlodipine 5mg (Thuốc Huyết Áp)",
-      dosage: "1 viên",
-      time: "08:00 (Sáng)",
-      status: "Chưa uống",
-      quantity: 30,
-      expire_date: "2026-12-31",
-      patient_name: "Cụ Nguyễn Văn A",
-      note: "Uống sau khi ăn sáng 15 phút"
-    },
-    {
-      id: "p_2",
-      medicine_id: "p_2",
-      name: "Metformin 500mg (Kiểm Soát Đường Huyết)",
-      dosage: "1 viên",
-      time: "12:00 (Trưa)",
-      status: "Đã uống",
-      quantity: 45,
-      expire_date: "2026-11-20",
-      patient_name: "Cụ Nguyễn Văn A",
-      note: "Uống kèm trong bữa ăn trưa"
-    },
-    {
-      id: "p_3",
-      medicine_id: "p_3",
-      name: "Glucosamine 500mg (Bổ Xương Khớp)",
-      dosage: "2 viên",
-      time: "18:00 (Tối)",
-      status: "Chưa uống",
-      quantity: 60,
-      expire_date: "2027-05-15",
-      patient_name: "Cụ Nguyễn Văn A",
-      note: "Uống cùng nước ấm sau ăn tối"
-    },
-    {
-      id: "p_4",
-      medicine_id: "p_4",
-      name: "Vitamin C 1000mg (Tăng Đề Kháng)",
-      dosage: "1 sủi",
-      time: "09:00 (Sáng)",
-      status: "Đã uống",
-      quantity: 20,
-      expire_date: "2026-10-10",
-      patient_name: "Cụ Nguyễn Văn A",
-      note: "Pha sủi 200ml nước lọc"
-    }
-  ];
-
-  const personalPrescribedKeywords = [
-    "amlodipine", "metformin", "panadol", "glucosamine", "vitamin c",
-    "paracetamol", "losartan", "omeprazole", "atorvastatin"
-  ];
-
-  const scopeFiltered = (() => {
-    if (isAdmin) return medicines; // Admin hiển thị toàn bộ 301+ loại thuốc hệ thống
-
-    // Lọc các thuốc khớp đơn cá nhân từ backend
-    const apiPersonal = medicines.filter((m) => {
-      const pName = (m.patient_name || m.user_name || "").toLowerCase();
-      const medName = (m.name || m.medicine_name || "").toLowerCase();
-      if (pName.includes("nguyễn văn a") || pName.includes("cụ a")) return true;
-      return personalPrescribedKeywords.some((key) => medName.includes(key));
-    });
-
-    // Nếu từ backend có thuốc khớp thì hiển thị, nếu không có sẵn thì nạp Lịch Uống Thuốc Cá Nhân Chuẩn của Cụ A
-    return apiPersonal.length > 0 ? apiPersonal : DEFAULT_PERSONAL_SCHEDULE;
-  })();
-
-  const displayedMedicines = [...scopeFiltered].sort((first, second) => {
+  const displayedMedicines = [...medicines].sort((first, second) => {
     const nameA = first?.name || first?.medicine_name || "";
     const nameB = second?.name || second?.medicine_name || "";
     return sortAZ ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA);
   });
-
-  // ============================
-  // Render Interface
-  // ============================
 
   return (
     <section className="container-fluid px-3 px-md-4 pb-4 mt-4">
@@ -279,10 +251,14 @@ function MedicineTable({ addActivity }) {
         <div className="card-body p-3 p-md-4">
           <div className="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-4">
             <div>
-              <h3 className="h4 fw-bold mb-1">{isAdmin ? "Quản Lý Đơn Thuốc Hệ Thống" : "Lịch Uống Thuốc Của Cụ Nguyễn Văn A"}</h3>
+              <h3 className="h4 fw-bold mb-1">
+                {isAdmin && !patientId ? "Quản Lý Kho Dược & Danh Mục Thuốc" : `Đơn Thuốc Bệnh Nhân (${activePatientId})`}
+              </h3>
               <p className="text-muted mb-0">
-                {isAdmin ? "Danh sách đơn thuốc của tất cả bệnh nhân trên hệ thống: " : "Đơn thuốc dành riêng cho người thân gia đình: "}
-                <b>{displayedMedicines.length}</b> đơn thuốc
+                {isAdmin && !patientId
+                  ? "Danh mục dược phẩm trên hệ thống: "
+                  : `Danh sách thuốc kê đơn thực tế: `}
+                <b>{displayedMedicines.length}</b> loại thuốc
               </p>
             </div>
 
@@ -302,7 +278,7 @@ function MedicineTable({ addActivity }) {
             <div className="col-lg-5">
               <input
                 className="form-control medicine-search-input"
-                placeholder="🔍 Tìm tên thuốc..."
+                placeholder="🔍 Tìm tên thuốc trong CSDL..."
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 aria-label="Tìm tên thuốc"
@@ -320,14 +296,14 @@ function MedicineTable({ addActivity }) {
           {loading && (
             <div className="text-center py-4 text-primary">
               <FaSpinner className="spinner-border spinner-border-sm me-2" role="status" />
-              <span>Đang tải dữ liệu từ Backend...</span>
+              <span>Đang tải dữ liệu từ CSDL Backend...</span>
             </div>
           )}
 
           <MedicineModal
             show={showModal}
             handleClose={handleClose}
-            addMedicine={addMedicine}
+            addMedicine={createMedicine}
             updateMedicine={updateMedicine}
             selectedMedicine={selectedMedicine}
           />
@@ -337,7 +313,7 @@ function MedicineTable({ addActivity }) {
               <tr>
                 <th>Tên thuốc</th>
                 <th>Liều lượng</th>
-                <th>Giờ uống</th>
+                <th>Giờ uống / Tần suất</th>
                 <th>Trạng thái</th>
                 <th>Thao tác</th>
               </tr>
@@ -346,66 +322,54 @@ function MedicineTable({ addActivity }) {
               {displayedMedicines.length === 0 ? (
                 <tr>
                   <td colSpan="5" className="text-center text-muted py-4">
-                    Chưa có danh sách thuốc nào trong cơ sở dữ liệu.
+                    {loading ? "Đang truy vấn CSDL..." : "Chưa có danh sách thuốc nào trong cơ sở dữ liệu."}
                   </td>
                 </tr>
               ) : (
-                displayedMedicines.map((medicine) => {
-                  const medId = medicine.medicine_id || medicine.id;
+                displayedMedicines.map((item) => {
+                  const itemId = item.prescription_item_id || item.medicine_id || item.id;
+                  const isTaken = item.status === "Đã uống";
+
                   return (
-                    <tr key={medId}>
-                      <td className="fw-semibold">{medicine.name}</td>
-                      <td>{medicine.dosage}</td>
+                    <tr key={itemId}>
+                      <td className="fw-semibold">{item.name}</td>
                       <td>
-                        <span
-                          className="badge px-3 py-2 fw-semibold"
-                          style={{
-                            backgroundColor: "var(--bg-card-subtle)",
-                            color: "var(--text-main)",
-                            border: "1px solid var(--border-color)"
-                          }}
-                        >
-                          {medicine.time}
-                        </span>
+                        <span className="badge bg-secondary text-wrap">{item.dosage}</span>
                       </td>
                       <td>
-                        <span
-                          className={`badge px-3 py-2 fw-semibold ${
-                            medicine.status === "Đã uống" ? "bg-success text-white" : "bg-warning text-dark"
-                          }`}
-                        >
-                          {medicine.status}
+                        <span className="badge bg-info text-dark text-wrap">{item.time}</span>
+                      </td>
+                      <td>
+                        <span className={`badge ${isTaken ? "bg-success" : "bg-warning text-dark"}`}>
+                          {item.status}
                         </span>
                       </td>
                       <td>
                         <div className="d-flex gap-2 flex-wrap">
                           <Button
+                            size="sm"
                             variant="outline-warning"
-                            size="sm"
-                            className="medicine-action-button"
-                            onClick={() => editMedicine(medicine)}
+                            onClick={() => handleEdit(item)}
+                            title="Sửa thông tin thuốc"
                           >
-                            <FaEdit className="me-1" />
-                            Sửa
+                            <FaEdit className="me-1" /> Sửa
                           </Button>
                           <Button
+                            size="sm"
                             variant="outline-danger"
-                            size="sm"
-                            className="medicine-action-button"
-                            onClick={() => deleteMedicine(medId)}
+                            onClick={() => handleDelete(itemId)}
+                            title="Xóa thuốc khỏi CSDL"
                           >
-                            <FaTrash className="me-1" />
-                            Xóa
+                            <FaTrash className="me-1" /> Xóa
                           </Button>
                           <Button
-                            variant={medicine.status === "Đã uống" ? "success" : "outline-success"}
                             size="sm"
-                            className="medicine-action-button"
-                            disabled={medicine.status === "Đã uống"}
-                            onClick={() => markAsTaken(medId)}
+                            variant={isTaken ? "outline-secondary" : "outline-success"}
+                            onClick={() => handleToggleStatus(itemId)}
+                            title="Đánh dấu đã uống / chưa uống"
                           >
                             <FaCheck className="me-1" />
-                            {medicine.status === "Đã uống" ? "Đã uống" : "Đánh dấu đã uống"}
+                            {isTaken ? "Đã uống" : "Đánh dấu đã uống"}
                           </Button>
                         </div>
                       </td>

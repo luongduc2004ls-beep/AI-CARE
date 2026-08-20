@@ -75,9 +75,7 @@ class DashboardService:
     @staticmethod
     def program_statistics():
 
-        medicines = Medicine.query.options(
-            selectinload(Medicine.schedules)
-        ).all()
+        medicines = Medicine.query.all()
         today = date.today()
         current_time = datetime.now().time()
         total_medicines = len(medicines)
@@ -219,9 +217,7 @@ class DashboardService:
             "Tối": 0
         }
 
-        medicines = Medicine.query.options(
-            selectinload(Medicine.schedules)
-        ).all()
+        medicines = Medicine.query.all()
 
         for medicine in medicines:
             schedule = MedicineService.get_display_schedule(medicine)

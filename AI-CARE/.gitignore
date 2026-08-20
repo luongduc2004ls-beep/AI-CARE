@@ -23,3 +23,11 @@ __pycache__/
 Thumbs.db
 .vscode/
 .idea/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+instance/
+backend_elderlyAI/instance/
+

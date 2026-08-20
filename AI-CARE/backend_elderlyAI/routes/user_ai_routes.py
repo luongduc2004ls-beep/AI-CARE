@@ -10,6 +10,7 @@ user_ai_bp = Blueprint("user_ai_bp", __name__)
 
 
 @user_ai_bp.route("/my/ai/chat", methods=["POST"])
+@user_ai_bp.route("/user/ai/chat", methods=["POST"])
 def user_ai_chat():
     """
     Endpoint tiếp nhận tin nhắn chat từ Thân nhân Gia đình (User AI Chat).

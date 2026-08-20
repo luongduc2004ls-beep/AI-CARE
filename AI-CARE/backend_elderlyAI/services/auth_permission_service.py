@@ -51,14 +51,16 @@ class AuthPermissionService:
         try:
             uid = int(user_id) if str(user_id).isdigit() else None
             if uid:
-                records = UserPatientAccess.query.filter_by(user_id=uid).all()
-                if records:
-                    return [r.patient_id for r in records]
-
                 user = db.session.get(User, uid)
-                if user:
-                    primary_id = user.patient_code or f"PAT{user.user_id:05d}"
-                    return [primary_id]
+                primary_id = user.patient_code if user and user.patient_code else None
+
+                records = UserPatientAccess.query.filter_by(user_id=uid).all()
+                allowed = [r.patient_id for r in records]
+                if primary_id and primary_id not in allowed:
+                    allowed.append(primary_id)
+
+                if allowed:
+                    return allowed
         except Exception:
             pass
 

@@ -124,17 +124,40 @@ def seed_notifications_if_empty():
             db.session.rollback()
         pass
 
-def get_all_notifications():
-    """Lấy toàn bộ danh sách thông báo & lịch sử cảnh báo"""
+def get_all_notifications(user_id=None, user_role="Admin", patient_id=None, limit=100):
+    """
+    Lấy danh sách thông báo & lịch sử cảnh báo có phân quyền và phân lập theo bệnh nhân.
+    - Admin: Nhìn thấy toàn bộ thông báo hệ thống và tất cả người cao tuổi.
+    - User / Người thân: CHỈ nhìn thấy thông báo của đúng người thân/bệnh nhân được cấp quyền.
+    """
     try:
+        from models.user import User
+        from services.auth_permission_service import AuthPermissionService
+
         seed_notifications_if_empty()
-        items = Notification.query.order_by(Notification.created_at.desc()).all()
+        query = db.session.query(Notification, User).outerjoin(User, Notification.user_id == User.user_id)
+
+        # Phân lập dữ liệu nếu không phải Admin
+        role_upper = (user_role or "ADMIN").upper()
+        if role_upper != "ADMIN":
+            allowed_patient_codes = AuthPermissionService.get_authorized_patient_ids(user_id, user_role)
+            if patient_id and str(patient_id).strip() in allowed_patient_codes:
+                allowed_patient_codes = [str(patient_id).strip()]
+
+            # Lọc theo patient_code của User hoặc user_id
+            query = query.filter(User.patient_code.in_(allowed_patient_codes))
+        elif patient_id:
+            # Admin lọc theo một bệnh nhân cụ thể
+            target_code = str(patient_id).strip()
+            query = query.filter((User.patient_code == target_code) | (User.user_id == target_code))
+
+        items = query.order_by(Notification.created_at.desc()).limit(limit).all()
+
         if items:
             result = []
-            for item in items:
-                # xác định loại dựa theo title / content
+            for notif, user in items:
                 t = "warning"
-                title_lower = (item.title or "").lower()
+                title_lower = (notif.title or "").lower()
                 if "ngã" in title_lower or "fall" in title_lower:
                     t = "fall"
                 elif "thuốc" in title_lower or "medicine" in title_lower:
@@ -142,15 +165,26 @@ def get_all_notifications():
                 elif "sinh hiệu" in title_lower or "huyết áp" in title_lower or "tim" in title_lower or "thân nhiệt" in title_lower:
                     t = "health"
 
+                sev = "CRITICAL" if t == "fall" else ("HIGH" if t == "health" else "WARNING")
+                st = "READ" if notif.is_read else "UNREAD"
+
                 result.append({
-                    "id": item.notification_id,
-                    "notification_id": item.notification_id,
-                    "title": item.title,
-                    "content": item.content,
+                    "id": notif.notification_id,
+                    "notification_id": notif.notification_id,
+                    "user_id": notif.user_id,
+                    "patient_code": user.patient_code if user else "PAT10000",
+                    "patient_name": user.full_name if user else "Người cao tuổi",
+                    "title": notif.title,
+                    "content": notif.content,
+                    "message": notif.content,
                     "type": t,
-                    "is_read": item.is_read,
-                    "created_at": item.created_at.strftime("%Y-%m-%d %H:%M:%S") if item.created_at else "Gần đây",
-                    "time": item.created_at.strftime("%Y-%m-%d %H:%M:%S") if item.created_at else "Gần đây"
+                    "severity": sev,
+                    "is_read": bool(notif.is_read),
+                    "isRead": bool(notif.is_read),
+                    "status": st,
+                    "created_at": notif.created_at.strftime("%Y-%m-%d %H:%M:%S") if notif.created_at else "Gần đây",
+                    "time": notif.created_at.strftime("%Y-%m-%d %H:%M:%S") if notif.created_at else "Gần đây",
+                    "location": "Phòng chăm sóc"
                 })
             return result
     except Exception:
@@ -158,8 +192,8 @@ def get_all_notifications():
 
     return INITIAL_NOTIFICATIONS
 
-def get_unread_notifications():
-    all_notifs = get_all_notifications()
+def get_unread_notifications(user_id=None, user_role="Admin", patient_id=None, limit=100):
+    all_notifs = get_all_notifications(user_id=user_id, user_role=user_role, patient_id=patient_id, limit=limit)
     return [n for n in all_notifs if not n.get("is_read")]
 
 def mark_notification_read(notif_id):

@@ -133,6 +133,13 @@ class User(db.Model):
         onupdate=datetime.utcnow
     )
 
+    prescriptions = db.relationship(
+        "Prescription",
+        backref="user",
+        lazy=True,
+        cascade="all, delete-orphan"
+    )
+
     medicine_schedules = db.relationship(
         "MedicineSchedule",
         backref="user",
