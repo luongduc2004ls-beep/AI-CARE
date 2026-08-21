@@ -105,16 +105,16 @@ function AlertPage() {
     loadAdminAlerts();
   }, [loadAdminAlerts]);
 
-  const handleResolveAlert = async (id) => {
+  const handleResolveAlert = async (id, targetStatus = "RESOLVED") => {
     try {
       await alertService.adminUpdateAlertStatus(id, {
-        status: "RESOLVED",
+        status: targetStatus,
         operator_name: currentUser?.full_name || "Admin",
-        note: "Đã kiểm tra an toàn và xử lý xong"
+        note: targetStatus === "RESOLVED" ? "Đã kiểm tra an toàn và xử lý xong" : "Đã mở lại cảnh báo cần can thiệp"
       });
       await loadAdminAlerts();
     } catch (err) {
-      console.error("Lỗi khi giải quyết cảnh báo:", err);
+      console.error("Lỗi khi cập nhật trạng thái cảnh báo:", err);
       alert("Không thể cập nhật trạng thái cảnh báo.");
     }
   };

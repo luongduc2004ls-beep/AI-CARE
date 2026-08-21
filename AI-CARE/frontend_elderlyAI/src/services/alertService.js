@@ -138,6 +138,20 @@ const alertService = {
       console.error("Lỗi khi tải thống kê cảnh báo User:", error.message);
       throw error;
     }
+  },
+
+  /**
+   * Cập nhật trạng thái xử lý cảnh báo người thân (Đã xử lý / Chưa xử lý / Đang theo dõi).
+   * Endpoint: PATCH /api/user/alerts/:id/status
+   */
+  async userUpdateAlertStatus(alertId, payload = { status: "RESOLVED" }) {
+    try {
+      const response = await api.patch(`/user/alerts/${alertId}/status`, payload);
+      return response;
+    } catch (error) {
+      console.error(`Lỗi khi cập nhật trạng thái cảnh báo ${alertId}:`, error.message);
+      throw error;
+    }
   }
 };
 

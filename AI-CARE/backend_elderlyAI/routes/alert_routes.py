@@ -255,3 +255,39 @@ def get_user_alert_stats_endpoint():
         "success": True,
         "stats": stats
     }), 200
+
+
+@alert_bp.route("/user/alerts/<int:alert_id>/status", methods=["PATCH", "PUT"])
+@alert_bp.route("/alerts/<int:alert_id>/status", methods=["PATCH", "PUT"])
+def update_user_alert_status_endpoint(alert_id):
+    """
+    [USER / CAREGIVER] Cập nhật trạng thái xử lý cảnh báo (Đã xử lý / Chưa xử lý / Đang theo dõi).
+    """
+    user_id = request.headers.get("X-User-Id", request.args.get("userId"))
+    user_role = request.headers.get("X-User-Role", request.args.get("userRole", "User"))
+
+    # Kiểm tra quyền với cảnh báo này
+    alert_data, err = AlertService.get_alert_by_id(alert_id, user_id=user_id, user_role=user_role)
+    if err:
+        return jsonify({"success": False, "message": err}), 403
+
+    data = request.get_json() or {}
+    new_status = data.get("status", "RESOLVED")
+    operator = data.get("operator_name") or data.get("resolved_by") or "Người thân"
+    note = data.get("note") or data.get("resolution_note")
+
+    updated, update_err = AlertService.update_alert_status(
+        alert_id=alert_id,
+        new_status=new_status,
+        user_role=user_role,
+        operator_name=operator,
+        note=note
+    )
+    if update_err:
+        return jsonify({"success": False, "message": update_err}), 400
+
+    return jsonify({
+        "success": True,
+        "alert": updated,
+        "message": f"Đã cập nhật trạng thái cảnh báo sang '{new_status}' thành công"
+    }), 200

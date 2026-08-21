@@ -114,8 +114,13 @@ function NotificationList({ notifications = [], alerts = [], onMarkAsRead, onDel
 
                         <div className="d-flex gap-2">
                           {!isResolved && onMarkAsRead && (
-                            <Button variant="outline-success" size="sm" className="rounded-pill px-3 fw-bold" onClick={() => onMarkAsRead(alertId)}>
+                            <Button variant="outline-success" size="sm" className="rounded-pill px-3 fw-bold" onClick={() => onMarkAsRead(alertId, "RESOLVED")}>
                               <FaCheck className="me-1" /> Xác nhận xử lý
+                            </Button>
+                          )}
+                          {isResolved && onMarkAsRead && (
+                            <Button variant="outline-warning" size="sm" className="rounded-pill px-3 fw-bold" onClick={() => onMarkAsRead(alertId, "ALERTED")}>
+                              <FaExclamationTriangle className="me-1" /> Chưa hoàn thành
                             </Button>
                           )}
                           {onDelete && (

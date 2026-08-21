@@ -405,9 +405,18 @@ export default function NotificationHistory({ notifications = [], historyList = 
                           {!isResolved && onMarkAsRead && (
                             <button
                               className="btn btn-sm btn-outline-success rounded-pill px-3 py-1 d-flex align-items-center gap-1 fw-bold"
-                              onClick={() => onMarkAsRead(alertId)}
+                              onClick={() => onMarkAsRead(alertId, "RESOLVED")}
                             >
                               <FaCheckCircle /> Xác nhận & Xử lý
+                            </button>
+                          )}
+
+                          {isResolved && onMarkAsRead && (
+                            <button
+                              className="btn btn-sm btn-outline-warning rounded-pill px-3 py-1 d-flex align-items-center gap-1 fw-bold"
+                              onClick={() => onMarkAsRead(alertId, "ALERTED")}
+                            >
+                              <FaExclamationTriangle /> Đánh dấu chưa hoàn thành
                             </button>
                           )}
 
