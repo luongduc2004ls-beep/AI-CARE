@@ -91,6 +91,9 @@ class MedicineSchedule(db.Model):
         onupdate=datetime.utcnow
     )
 
+    # Relationships
+    medicine = db.relationship("Medicine", lazy=True)
+
     def to_dict(self):
         med_name = "Thuốc"
         med_dosage = self.dose_amount or "1 viên"

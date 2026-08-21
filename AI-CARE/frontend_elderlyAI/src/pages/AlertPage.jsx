@@ -57,17 +57,8 @@ function AlertPage() {
   const { currentUser } = useAuth();
   const isAdmin = currentUser?.role === "Admin";
 
-  // NẾU LÀ NGƯỜI THÂN / CAREGIVER: Hiển thị giao diện phân lập an toàn 100%
-  if (!isAdmin) {
-    return (
-      <section className="container-fluid px-3 px-md-4 py-3">
-        <UserAlertView />
-      </section>
-    );
-  }
-
   // ============================
-  // ADMIN STATE & HANDLERS
+  // ADMIN STATE & HANDLERS (Unconditionally declared at top level)
   // ============================
   const [alerts, setAlerts] = useState([]);
   const [stats, setStats] = useState({ total: 0, fall_count: 0, health_count: 0, pending_count: 0, resolved_count: 0 });
@@ -78,6 +69,7 @@ function AlertPage() {
   const [error, setError] = useState(null);
 
   const loadAdminAlerts = useCallback(async () => {
+    if (!isAdmin) return;
     setLoading(true);
     setError(null);
     try {
@@ -147,6 +139,14 @@ function AlertPage() {
       console.error("Lỗi khi xóa thông báo:", err);
     }
   };
+
+  if (!isAdmin) {
+    return (
+      <section className="container-fluid px-3 px-md-4 py-3">
+        <UserAlertView />
+      </section>
+    );
+  }
 
   const totalCount = stats.total || alerts.length;
   const fallCount = stats.fall_count || alerts.filter((a) => a.type === "fall").length;

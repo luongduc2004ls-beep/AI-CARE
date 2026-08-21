@@ -21,6 +21,8 @@ from routes.chatbot_routes import chatbot_bp, chat_with_gemini  # Route Trợ l�
 from routes.admin_ai_routes import admin_ai_bp  # Nhánh AI Quản Trị Hệ Thống
 from routes.user_ai_routes import user_ai_bp    # Nhánh AI Chăm Sóc Người Thân
 from routes.alert_routes import alert_bp        # Nhánh Cảnh Báo Phân Lập Admin vs User
+from routes.ai_patient_routes import ai_patient_bp  # Medical AI Agent: Patient Scope
+from routes.ai_admin_routes import ai_admin_bp      # Medical AI Agent: Admin Scope
 
 # Import Error Handler trung tâm
 from middleware.exception import register_error
@@ -40,7 +42,7 @@ app.config["DATABASE_AVAILABLE"] = None
 # Cấu hình CORS toàn diện cho phép Frontend (Vite 5173 / Localhost) kết nối an toàn
 CORS(
     app,
-    resources={r"/*": {"origins": ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:3000", "*"]}},
+    resources={r"/*": {"origins": Config.CORS_ORIGINS}},
     supports_credentials=True,
     allow_headers=["Content-Type", "Authorization", "X-User-Role", "X-User-Id", "Accept", "Origin"],
     methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
@@ -75,6 +77,8 @@ app.register_blueprint(auth_bp, url_prefix="/api")
 app.register_blueprint(health_bp, url_prefix="/api")
 app.register_blueprint(admin_ai_bp, url_prefix="/api")
 app.register_blueprint(user_ai_bp, url_prefix="/api")
+app.register_blueprint(ai_patient_bp, url_prefix="/api")
+app.register_blueprint(ai_admin_bp, url_prefix="/api")
 app.register_blueprint(alert_bp, url_prefix="/api")
 app.register_blueprint(chatbot_bp, url_prefix="/api")
 
@@ -170,5 +174,5 @@ if __name__ == "__main__":
     app.run(
         host=Config.BACKEND_HOST,
         port=Config.BACKEND_PORT,
-        debug=True
+        debug=Config.DEBUG
     )

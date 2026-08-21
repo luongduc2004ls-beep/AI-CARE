@@ -2,8 +2,10 @@
 # ROUTE ADMIN AI - QUẢN TRỊ VIỆN (ADMIN_AI_ROUTES.PY)
 # ==============================================================================
 from flask import Blueprint, request, jsonify
-from services.ai.admin_gemini_service import AdminGeminiService
+from services.ai.admin_ai_service import AdminAIService
+from services.rbac_service import RBACService
 from models.conversation import Conversation, Message
+from middleware.auth_middleware import get_current_user
 
 admin_ai_bp = Blueprint("admin_ai_bp", __name__)
 
@@ -13,18 +15,21 @@ def admin_ai_chat():
     """
     Endpoint tiếp nhận tin nhắn chat từ Quản trị viên (Admin AI Chat).
     """
-    user_role = request.headers.get("X-User-Role", request.args.get("userRole", "Admin"))
-    if (user_role or "").upper() != "ADMIN":
+    user = get_current_user()
+    user_role = user.role if user else request.headers.get("X-User-Role", request.args.get("userRole", "Admin"))
+    user_id = user.user_id if user else request.headers.get("X-User-Id", 1)
+
+    if not RBACService.is_admin_role(user_role):
         return jsonify({
             "success": False,
             "reply": "🔒 403 Forbidden: Chỉ tài khoản Quản trị viên mới có quyền truy cập Admin AI.",
-            "error": "Unauthorized role"
+            "error": "Unauthorized role",
+            "forbidden": True
         }), 403
 
     data = request.get_json(silent=True) or {}
     user_message = data.get("message", "").strip()
     conversation_id = data.get("conversationId") or "admin_session_default"
-    user_id = request.headers.get("X-User-Id", data.get("userId") or 1)
     history = data.get("history", [])
 
     if not user_message:
@@ -33,10 +38,11 @@ def admin_ai_chat():
             "reply": "⚠️ Bạn chưa nhập nội dung câu hỏi quản trị."
         }), 200
 
-    result = AdminGeminiService.process_chat(
+    result = AdminAIService.process_chat(
         user_message=user_message,
         conversation_id=conversation_id,
         user_id=int(user_id) if str(user_id).isdigit() else 1,
+        user_role=user_role,
         history=history
     )
     return jsonify(result), 200

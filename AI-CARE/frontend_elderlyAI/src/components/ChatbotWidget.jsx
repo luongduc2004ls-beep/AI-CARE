@@ -5,12 +5,14 @@
 // ==============================================================================
 
 import React, { useState, useRef, useEffect } from 'react';
+import { useAuth } from '../context/AuthContext';
 import './ChatbotWidget.css';
 
 export default function ChatbotWidget({ apiUrl = 'http://localhost:5000/api/chatbot/chat' }) {
+    const { currentUser } = useAuth();
     const [isOpen, setIsOpen] = useState(false);
     const [messages, setMessages] = useState([
-        { sender: 'bot', text: 'Xin chào! Tôi là Trợ lý AI CARE Gemini. Tôi có thể giúp gì cho sức khỏe của bạn hôm nay?' }
+        { sender: 'bot', text: 'Xin chào! Tôi là Trợ lý Y Tế AI ElderlyCare. Tôi có thể hỗ trợ gì cho sức khỏe của bạn và người thân hôm nay?' }
     ]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -27,17 +29,28 @@ export default function ChatbotWidget({ apiUrl = 'http://localhost:5000/api/chat
         const trimmed = input.trim();
         if (!trimmed || isLoading) return;
 
-        // Thêm tin nhắn của user vào danh sách
         const newMessages = [...messages, { sender: 'user', text: trimmed }];
         setMessages(newMessages);
         setInput('');
         setIsLoading(true);
 
         try {
+            const userRole = currentUser?.role || "User";
+            const userId = currentUser?.user_id || (userRole === "Admin" ? 1 : 2);
+
             const res = await fetch(apiUrl, {
                 method: 'POST',
-                headers: { 'Content-Type': "application/json" },
-                body: JSON.stringify({ message: trimmed })
+                headers: {
+                    'Content-Type': "application/json",
+                    'X-User-Role': userRole,
+                    'X-User-Id': String(userId)
+                },
+                body: JSON.stringify({
+                    message: trimmed,
+                    userRole: userRole,
+                    userId: userId,
+                    history: newMessages.map(m => ({ role: m.sender === "user" ? "user" : "model", text: m.text }))
+                })
             });
 
             const data = await res.json();

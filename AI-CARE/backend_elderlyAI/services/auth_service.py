@@ -1,258 +1,247 @@
-from datetime import datetime
+﻿"""
+Authentication Service (JWT Generation, Verification & User Management)
+ElderlyCare AI System
+"""
+
+import jwt
+from datetime import datetime, timedelta
+from typing import Optional, Dict, Any, Tuple
+from werkzeug.security import generate_password_hash, check_password_hash
 from database import db
 from models.user import User
+from config import Config
+from services.rbac_service import RBACService
 
-# Các tài khoản mẫu mặc định sẵn sàng đăng nhập
-DEFAULT_USERS = [
-  {
-    "username": "admin",
-    "password": "password123",
-    "email": "admin@elderlyai.vn",
-    "full_name": "Quản Trị Viên Hệ Thống",
-    "role": "Admin",
-    "phone": "0901234567"
-  },
-  {
-    "username": "cunguyenana",
-    "password": "password123",
-    "email": "cunguyenana@elderlyai.vn",
-    "full_name": "Cụ Nguyễn Văn A",
-    "role": "Caregiver",
-    "phone": "0987654321"
-  }
-]
 
-from sqlalchemy import text
+class AuthService:
+    """
+    Dịch vụ xử lý Xác thực, Mã hóa JWT và Quản lý Người dùng.
+    """
 
-def seed_default_users_if_empty():
-    """Khởi tạo tài khoản mẫu trong cơ sở dữ liệu nếu chưa có (Auto Migration)"""
-    try:
-        if db.session:
-            db.create_all()
+    JWT_ALGORITHM = "HS256"
+    JWT_EXPIRATION_HOURS = 168  # 7 ngày
 
-            # Tự động nâng cấp cột bảng Users nếu chưa có (SQLite Auto-Migration)
-            for col_def in [
-                "ALTER TABLE Users ADD COLUMN username VARCHAR(80);",
-                "ALTER TABLE Users ADD COLUMN email VARCHAR(120);",
-                "ALTER TABLE Users ADD COLUMN password_hash VARCHAR(255);",
-                "ALTER TABLE Users ADD COLUMN role VARCHAR(50);"
-            ]:
-                try:
-                    db.session.execute(text(col_def))
-                    db.session.commit()
-                except Exception:
-                    db.session.rollback()
+    @classmethod
+    def get_jwt_secret(cls) -> str:
+        return Config.SECRET_KEY or "elderly_ai_secret_key_jwt_secure_2026"
 
-            for item in DEFAULT_USERS:
-                existing = User.query.filter_by(username=item["username"]).first()
-                if not existing:
-                    u = User(
-                        username=item["username"],
-                        email=item["email"],
-                        full_name=item["full_name"],
-                        role=item["role"],
-                        phone=item["phone"],
-                        patient_code=f"PATIENT_{item['username'].upper()}",
-                        created_at=datetime.utcnow()
-                    )
-                    u.set_password(item["password"])
-                    db.session.add(u)
-                else:
-                    existing.role = item["role"]
-                    existing.full_name = item["full_name"]
-            db.session.commit()
-    except Exception as exc:
-        if db.session:
-            db.session.rollback()
-        print(f"[AuthService] Seed users error: {exc}")
+    @classmethod
+    def generate_token(cls, user: User) -> str:
+        """
+        Tạo mã JWT Token có chữ ký số bảo mật và thời hạn hết hạn rõ ràng.
+        """
+        payload = {
+            "sub": str(user.user_id),
+            "user_id": user.user_id,
+            "username": user.username,
+            "role": user.role or "User",
+            "patient_code": user.patient_code,
+            "full_name": user.full_name,
+            "iat": datetime.utcnow(),
+            "exp": datetime.utcnow() + timedelta(hours=cls.JWT_EXPIRATION_HOURS)
+        }
+        return jwt.encode(payload, cls.get_jwt_secret(), algorithm=cls.JWT_ALGORITHM)
 
-def register_user(data):
-    """Đăng ký tài khoản người dùng mới với mật khẩu mã hóa"""
-    username = (data.get("username") or "").strip()
-    password = (data.get("password") or "").strip()
-    email = (data.get("email") or "").strip()
-    full_name = (data.get("full_name") or username).strip()
-    role = data.get("role", "Caregiver")
-    phone = data.get("phone", "")
+    @classmethod
+    def verify_token(cls, token: str) -> Optional[User]:
+        """
+        Xác thực chữ ký và thời hạn của JWT Token, sau đó tải User từ Database.
+        """
+        if not token:
+            return None
+        try:
+            payload = jwt.decode(token, cls.get_jwt_secret(), algorithms=[cls.JWT_ALGORITHM])
+            user_id = payload.get("user_id") or payload.get("sub")
+            if not user_id:
+                return None
+            user = db.session.get(User, int(user_id))
+            if user and (user.is_active is None or user.is_active is True):
+                return user
+            return None
+        except (jwt.ExpiredSignatureError, jwt.InvalidTokenError, Exception):
+            return None
 
-    if not username or not password:
-        return {"success": False, "message": "Tên đăng nhập và mật khẩu là bắt buộc"}, 400
+    @classmethod
+    def decode_token_payload(cls, token: str) -> Optional[Dict[str, Any]]:
+        """
+        Giải mã payload của token (nếu hợp lệ).
+        """
+        try:
+            return jwt.decode(token, cls.get_jwt_secret(), algorithms=[cls.JWT_ALGORITHM])
+        except Exception:
+            return None
 
-    if len(password) < 6:
-        return {"success": False, "message": "Mật khẩu phải chứa ít nhất 6 ký tự"}, 400
+    @classmethod
+    def login(cls, username_or_email: str, password: str) -> Tuple[Dict[str, Any], int]:
+        """
+        Đăng nhập bằng username/email và mật khẩu đã hash an toàn.
+        """
+        uname = (username_or_email or "").strip()
+        pwd = (password or "").strip()
 
-    seed_default_users_if_empty()
+        if not uname or not pwd:
+            return {
+                "success": False,
+                "error": {
+                    "code": "BAD_REQUEST",
+                    "message": "Vui lòng nhập đầy đủ tên đăng nhập và mật khẩu."
+                }
+            }, 400
 
-    try:
-        if db.session:
-            existing_user = User.query.filter(
-                (User.username == username) | (User.email == email)
-            ).first()
+        user = User.query.filter(
+            (User.username == uname) | (User.email == uname)
+        ).first()
 
-            if existing_user:
-                return {"success": False, "message": "Tên đăng nhập hoặc Email đã tồn tại trên hệ thống"}, 400
+        if not user:
+            return {
+                "success": False,
+                "error": {
+                    "code": "UNAUTHORIZED",
+                    "message": "Tên đăng nhập hoặc mật khẩu không chính xác."
+                }
+            }, 401
 
+        # Xác thực mật khẩu qua Werkzeug check_password_hash
+        is_valid = user.check_password(pwd)
+        if not is_valid:
+            return {
+                "success": False,
+                "error": {
+                    "code": "UNAUTHORIZED",
+                    "message": "Tên đăng nhập hoặc mật khẩu không chính xác."
+                }
+            }, 401
+
+        token = cls.generate_token(user)
+        user_dict = user.to_dict()
+        user_dict["permissions"] = RBACService.get_authorized_patient_ids_for_user(user.user_id, user.role)
+
+        return {
+            "success": True,
+            "message": f"Đăng nhập thành công! Xin chào {user.full_name}.",
+            "token": token,
+            "user": user_dict
+        }, 200
+
+    @classmethod
+    def register(cls, data: Dict[str, Any]) -> Tuple[Dict[str, Any], int]:
+        """
+        Đăng ký tài khoản mới với mật khẩu được băm (hash) chuẩn mật mã.
+        """
+        username = (data.get("username") or "").strip()
+        password = (data.get("password") or "").strip()
+        email = (data.get("email") or "").strip()
+        full_name = (data.get("full_name") or username).strip()
+        role = data.get("role", "User")
+        phone = data.get("phone", "")
+
+        if not username or not password:
+            return {
+                "success": False,
+                "error": {
+                    "code": "BAD_REQUEST",
+                    "message": "Tên đăng nhập và mật khẩu là bắt buộc."
+                }
+            }, 400
+
+        if len(password) < 6:
+            return {
+                "success": False,
+                "error": {
+                    "code": "BAD_REQUEST",
+                    "message": "Mật khẩu phải chứa ít nhất 6 ký tự."
+                }
+            }, 400
+
+        existing = User.query.filter(
+            (User.username == username) | (User.email == email)
+        ).first()
+        if existing:
+            return {
+                "success": False,
+                "error": {
+                    "code": "CONFLICT",
+                    "message": "Tên đăng nhập hoặc Email đã được đăng ký trên hệ thống."
+                }
+            }, 409
+
+        try:
             new_user = User(
                 username=username,
-                email=email,
+                email=email if email else None,
                 full_name=full_name,
                 role=role,
                 phone=phone,
-                patient_code=f"PATIENT_{username.upper()}_{int(datetime.utcnow().timestamp())}",
+                patient_code=f"PAT_{username.upper()}_{int(datetime.utcnow().timestamp())}",
                 created_at=datetime.utcnow()
             )
             new_user.set_password(password)
             db.session.add(new_user)
             db.session.commit()
 
+            token = cls.generate_token(new_user)
             return {
                 "success": True,
                 "message": "Đăng ký tài khoản thành công!",
+                "token": token,
                 "user": new_user.to_dict()
             }, 201
-    except Exception as exc:
-        if db.session:
+        except Exception as exc:
             db.session.rollback()
-        return {"success": False, "message": f"Lỗi cơ sở dữ liệu: {str(exc)}"}, 500
-
-    return {"success": False, "message": "Không thể tạo tài khoản"}, 400
-
-def login_user(username_or_email, password):
-    """Xác thực đăng nhập tài khoản người dùng và mật khẩu"""
-    username_or_email = (username_or_email or "").strip()
-    password = (password or "").strip()
-
-    if not username_or_email or not password:
-        return {"success": False, "message": "Vui lòng nhập tên đăng nhập và mật khẩu"}, 400
-
-    seed_default_users_if_empty()
-
-    try:
-        if db.session:
-            user = User.query.filter(
-                (User.username == username_or_email) | (User.email == username_or_email)
-            ).first()
-
-            # Flexible password validation for imported accounts (admin1..admin5, user1..user1000, admin, etc.)
-            password_valid = False
-            if user:
-                if user.check_password(password):
-                    password_valid = True
-                elif password in ("password123", "admin123", "user123", user.username):
-                    password_valid = True
-
-            if not user or not password_valid:
-                return {"success": False, "message": "Tên đăng nhập hoặc mật khẩu không chính xác!"}, 401
-
-            token = f"TOKEN_USER_{user.user_id}_{int(datetime.utcnow().timestamp())}"
-
             return {
-                "success": True,
-                "message": f"Đăng nhập thành công! Vai trò: {user.role}",
-                "token": token,
-                "user": user.to_dict()
-            }, 200
-    except Exception as exc:
-        print(f"[AuthService] Login error: {exc}")
+                "success": False,
+                "error": {
+                    "code": "DATABASE_ERROR",
+                    "message": f"Không thể lưu tài khoản: {str(exc)}"
+                }
+            }, 500
 
-    # Fallback simulation
-    if (username_or_email == "admin" or username_or_email == "cunguyenana") and password == "password123":
-        is_admin_user = username_or_email == "admin"
+    @classmethod
+    def get_me(cls, user: User) -> Dict[str, Any]:
+        """
+        Trả về thông tin chi tiết người dùng đã xác thực và danh sách quyền hạn.
+        """
+        user_dict = user.to_dict()
+        user_dict["permissions"] = RBACService.get_authorized_patient_ids_for_user(user.user_id, user.role)
         return {
             "success": True,
-            "message": "Đăng nhập thành công!",
-            "token": f"TOKEN_SIMULATION_{username_or_email.upper()}",
-            "user": {
-                "user_id": 1 if is_admin_user else 2,
-                "username": username_or_email,
-                "full_name": "Quản Trị Viên Hệ Thống" if is_admin_user else "Người Thân Cụ Nguyễn Văn A",
-                "role": "Admin" if is_admin_user else "Caregiver",
-                "email": f"{username_or_email}@elderlyai.vn"
-            }
-        }, 200
-
-    return {"success": False, "message": "Tên đăng nhập hoặc mật khẩu không đúng!"}, 401
-
-def update_user_profile(username_or_id, data):
-    """Cập nhật thông tin cá nhân của người dùng"""
-    seed_default_users_if_empty()
-    try:
-        if db.session:
-            user = None
-            if isinstance(username_or_id, int) or (isinstance(username_or_id, str) and username_or_id.isdigit()):
-                user = User.query.get(int(username_or_id))
-            if not user:
-                user = User.query.filter_by(username=str(username_or_id)).first()
-
-            if not user:
-                user = User.query.first()
-
-            if user:
-                if data.get("full_name"):
-                    user.full_name = data["full_name"].strip()
-                if data.get("email"):
-                    user.email = data["email"].strip()
-                if data.get("phone"):
-                    user.phone = data["phone"].strip()
-                if data.get("emergency_contact"):
-                    user.emergency_contact = data["emergency_contact"].strip()
-                if data.get("address"):
-                    user.address = data["address"].strip()
-
-                db.session.commit()
-                return {
-                    "success": True,
-                    "message": "Cập nhật thông tin cá nhân thành công!",
-                    "user": user.to_dict()
-                }, 200
-    except Exception as exc:
-        if db.session:
-            db.session.rollback()
-        print(f"[AuthService] Update profile error: {exc}")
-
-    return {
-        "success": True,
-        "message": "Đã lưu cập nhật thông tin cá nhân!",
-        "user": {
-            "full_name": data.get("full_name", "Người Dùng"),
-            "email": data.get("email", ""),
-            "phone": data.get("phone", ""),
-            "role": data.get("role", "Caregiver")
+            "user": user_dict
         }
-    }, 200
 
-def change_user_password(username_or_id, current_password, new_password):
-    """Đổi mật khẩu bảo mật tài khoản"""
-    if not current_password or not new_password:
-        return {"success": False, "message": "Mật khẩu hiện tại và mật khẩu mới là bắt buộc"}, 400
 
-    if len(new_password) < 6:
-        return {"success": False, "message": "Mật khẩu mới phải có ít nhất 6 ký tự"}, 400
+# Helper functions duy trì tương thích
+def register_user(data):
+    return AuthService.register(data)
 
-    seed_default_users_if_empty()
+def login_user(username, password):
+    return AuthService.login(username, password)
 
+def update_user_profile(user_id, data):
     try:
-        if db.session:
-            user = None
-            if isinstance(username_or_id, int) or (isinstance(username_or_id, str) and username_or_id.isdigit()):
-                user = User.query.get(int(username_or_id))
-            if not user:
-                user = User.query.filter_by(username=str(username_or_id)).first()
+        user = db.session.get(User, int(user_id)) if str(user_id).isdigit() else None
+        if not user:
+            return {"success": False, "error": {"code": "NOT_FOUND", "message": "Không tìm thấy người dùng"}}, 404
+        for f in ["full_name", "email", "phone", "emergency_contact", "address"]:
+            if f in data:
+                setattr(user, f, str(data[f]).strip())
+        db.session.commit()
+        return {"success": True, "message": "Cập nhật hồ sơ thành công", "user": user.to_dict()}, 200
+    except Exception as e:
+        db.session.rollback()
+        return {"success": False, "error": {"code": "DATABASE_ERROR", "message": str(e)}}, 500
 
-            if not user:
-                user = User.query.first()
-
-            if user and user.check_password(current_password):
-                user.set_password(new_password)
-                db.session.commit()
-                return {"success": True, "message": "Đổi mật khẩu bảo mật thành công!"}, 200
-            elif user:
-                return {"success": False, "message": "Mật khẩu hiện tại không chính xác!"}, 400
-    except Exception as exc:
-        if db.session:
-            db.session.rollback()
-        print(f"[AuthService] Change password error: {exc}")
-
-    # Fallback response
-    return {"success": True, "message": "Đã cập nhật mật khẩu mới thành công!"}, 200
-
+def change_user_password(user_id, current_pwd, new_pwd):
+    try:
+        user = db.session.get(User, int(user_id)) if str(user_id).isdigit() else None
+        if not user:
+            return {"success": False, "error": {"code": "NOT_FOUND", "message": "Không tìm thấy người dùng"}}, 404
+        if not user.check_password(current_pwd):
+            return {"success": False, "error": {"code": "UNAUTHORIZED", "message": "Mật khẩu hiện tại không đúng"}}, 400
+        if len(new_pwd) < 6:
+            return {"success": False, "error": {"code": "BAD_REQUEST", "message": "Mật khẩu mới tối thiểu 6 ký tự"}}, 400
+        user.set_password(new_pwd)
+        db.session.commit()
+        return {"success": True, "message": "Đổi mật khẩu thành công"}, 200
+    except Exception as e:
+        db.session.rollback()
+        return {"success": False, "error": {"code": "DATABASE_ERROR", "message": str(e)}}, 500

@@ -120,8 +120,8 @@ function AppContent() {
         </main>
       </div>
 
-      {/* Tích hợp ChatbotWidget kết nối Backend Gemini AI */}
-      <ChatbotWidget apiUrl="http://localhost:5000/chat" />
+      {/* Tích hợp ChatbotWidget kết nối Backend Medical AI Agent */}
+      <ChatbotWidget apiUrl="http://127.0.0.1:5000/api/chatbot/chat" />
     </div>
   );
 }

@@ -23,9 +23,21 @@ from controllers.medicine_schedule_controller import (
 )
 from services.patient_medication_service import PatientMedicationService
 from services.auth_permission_service import AuthPermissionService
+from services.rbac_service import RBACService
 from services.patient_service import _resolve_user
+from middleware.auth_middleware import get_current_user
 
 medicine_bp = Blueprint("medicine", __name__)
+
+
+def _get_request_auth():
+    user = get_current_user()
+    if user:
+        return user.user_id, user.role, user
+    user_id = request.headers.get("X-User-Id", request.args.get("userId"))
+    user_role = request.headers.get("X-User-Role", request.args.get("userRole", "User"))
+    return user_id, user_role, None
+
 
 # ==============================================================================
 # 1. MASTER MEDICINE CATALOG (Dành cho Quản lý Dược / Admin)
@@ -58,13 +70,11 @@ medicine_bp.route("/medicine-schedules/<int:schedule_id>", methods=["DELETE"])(d
 @medicine_bp.route("/patients/<patient_id>/prescriptions", methods=["GET"])
 def get_patient_prescriptions_endpoint(patient_id):
     """Lấy toàn bộ đơn thuốc của một bệnh nhân (Patient Isolation)"""
-    user_id = request.headers.get("X-User-Id", request.args.get("userId"))
-    user_role = request.headers.get("X-User-Role", request.args.get("userRole", "User"))
-
+    user_id, user_role, _ = _get_request_auth()
     allowed_ids = AuthPermissionService.get_authorized_patient_ids(user_id, user_role)
     target_code = str(patient_id).strip()
 
-    if (user_role or "").upper() != "ADMIN" and target_code not in allowed_ids:
+    if not RBACService.is_admin_role(user_role) and target_code not in allowed_ids:
         user = _resolve_user(target_code)
         if not user or user.patient_code not in allowed_ids:
             return jsonify({"success": False, "message": "403 Forbidden: Không có quyền truy cập bệnh nhân này"}), 403
@@ -79,13 +89,11 @@ def get_patient_prescriptions_endpoint(patient_id):
 @medicine_bp.route("/patients/<patient_id>/prescriptions", methods=["POST"])
 def create_patient_prescription_endpoint(patient_id):
     """Tạo đơn thuốc mới cho bệnh nhân (Atomic Transaction)"""
-    user_id = request.headers.get("X-User-Id", request.args.get("userId"))
-    user_role = request.headers.get("X-User-Role", request.args.get("userRole", "User"))
-
+    user_id, user_role, _ = _get_request_auth()
     allowed_ids = AuthPermissionService.get_authorized_patient_ids(user_id, user_role)
     target_code = str(patient_id).strip()
 
-    if (user_role or "").upper() != "ADMIN" and target_code not in allowed_ids:
+    if not RBACService.is_admin_role(user_role) and target_code not in allowed_ids:
         user = _resolve_user(target_code)
         if not user or user.patient_code not in allowed_ids:
             return jsonify({"success": False, "message": "403 Forbidden: Không có quyền tạo đơn thuốc cho bệnh nhân này"}), 403
@@ -101,13 +109,11 @@ def create_patient_prescription_endpoint(patient_id):
 @medicine_bp.route("/patients/<patient_id>/medications", methods=["GET"])
 def get_patient_medications_endpoint(patient_id):
     """Lấy danh sách thuốc kê đơn thực tế của một bệnh nhân"""
-    user_id = request.headers.get("X-User-Id", request.args.get("userId"))
-    user_role = request.headers.get("X-User-Role", request.args.get("userRole", "User"))
-
+    user_id, user_role, _ = _get_request_auth()
     allowed_ids = AuthPermissionService.get_authorized_patient_ids(user_id, user_role)
     target_code = str(patient_id).strip()
 
-    if (user_role or "").upper() != "ADMIN" and target_code not in allowed_ids:
+    if not RBACService.is_admin_role(user_role) and target_code not in allowed_ids:
         user = _resolve_user(target_code)
         if not user or user.patient_code not in allowed_ids:
             return jsonify({"success": False, "message": "403 Forbidden: Không có quyền truy cập bệnh nhân này"}), 403
@@ -123,14 +129,13 @@ def get_patient_medications_endpoint(patient_id):
 @medicine_bp.route("/patients/<patient_id>/medication-schedule", methods=["GET"])
 def get_patient_medication_schedule_endpoint(patient_id):
     """Lấy lịch uống thuốc phân lập của một bệnh nhân theo ngày"""
-    user_id = request.headers.get("X-User-Id", request.args.get("userId"))
-    user_role = request.headers.get("X-User-Role", request.args.get("userRole", "User"))
+    user_id, user_role, _ = _get_request_auth()
     target_date = request.args.get("date")
 
     allowed_ids = AuthPermissionService.get_authorized_patient_ids(user_id, user_role)
     target_code = str(patient_id).strip()
 
-    if (user_role or "").upper() != "ADMIN" and target_code not in allowed_ids:
+    if not RBACService.is_admin_role(user_role) and target_code not in allowed_ids:
         user = _resolve_user(target_code)
         if not user or user.patient_code not in allowed_ids:
             return jsonify({"success": False, "message": "403 Forbidden: Không có quyền truy cập bệnh nhân này"}), 403
@@ -145,13 +150,12 @@ def get_patient_medication_schedule_endpoint(patient_id):
 @medicine_bp.route("/patients/<patient_id>/medication-history", methods=["GET"])
 def get_patient_medication_history_endpoint(patient_id):
     """Lấy nhật ký lịch sử uống thuốc của một bệnh nhân"""
-    user_id = request.headers.get("X-User-Id", request.args.get("userId"))
-    user_role = request.headers.get("X-User-Role", request.args.get("userRole", "User"))
+    user_id, user_role, _ = _get_request_auth()
 
     allowed_ids = AuthPermissionService.get_authorized_patient_ids(user_id, user_role)
     target_code = str(patient_id).strip()
 
-    if (user_role or "").upper() != "ADMIN" and target_code not in allowed_ids:
+    if not RBACService.is_admin_role(user_role) and target_code not in allowed_ids:
         user = _resolve_user(target_code)
         if not user or user.patient_code not in allowed_ids:
             return jsonify({"success": False, "message": "403 Forbidden: Không có quyền truy cập bệnh nhân này"}), 403

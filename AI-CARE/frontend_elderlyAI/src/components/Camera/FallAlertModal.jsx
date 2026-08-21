@@ -17,10 +17,10 @@ import "./FallAlertModal.css";
 const FallAlertModal = ({ alert, onClose, onAcknowledge }) => {
   const [showZoom, setShowZoom] = useState(false);
 
-  if (!alert) return null;
-
   // Phát âm thanh báo động khẩn cấp bằng Web Audio API
   useEffect(() => {
+    if (!alert) return;
+
     let audioCtx = null;
     let osc = null;
     let interval = null;
@@ -56,6 +56,8 @@ const FallAlertModal = ({ alert, onClose, onAcknowledge }) => {
       }
     };
   }, [alert]);
+
+  if (!alert) return null;
 
   const {
     alert_id,

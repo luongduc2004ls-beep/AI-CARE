@@ -2,9 +2,10 @@
 # ROUTE USER AI - THÂN NHÂN GIA ĐÌNH (USER_AI_ROUTES.PY)
 # ==============================================================================
 from flask import Blueprint, request, jsonify
-from services.ai.user_gemini_service import UserGeminiService
-from services.auth_permission_service import AuthPermissionService
+from services.ai.patient_ai_service import PatientAIService
+from services.rbac_service import RBACService
 from models.conversation import Conversation, Message
+from middleware.auth_middleware import get_current_user
 
 user_ai_bp = Blueprint("user_ai_bp", __name__)
 
@@ -13,21 +14,25 @@ user_ai_bp = Blueprint("user_ai_bp", __name__)
 @user_ai_bp.route("/user/ai/chat", methods=["POST"])
 def user_ai_chat():
     """
-    Endpoint tiếp nhận tin nhắn chat từ Thân nhân Gia đình (User AI Chat).
+    Endpoint tiếp nhận tin nhắn chat từ Thân nhân Gia đình & Bệnh nhân (Patient/User AI Chat).
     """
+    user = get_current_user()
     data = request.get_json(silent=True) or {}
     user_message = data.get("message", "").strip()
-    user_id = request.headers.get("X-User-Id", data.get("userId") or request.args.get("userId"))
-    user_role = request.headers.get("X-User-Role", data.get("userRole") or "User")
-    patient_id = data.get("patientId") or request.args.get("patient_id") or "PAT10000"
 
-    # Validate quyền truy cập
-    uid = int(user_id) if str(user_id).isdigit() else 2
-    if not AuthPermissionService.validate_patient_access(uid, user_role, patient_id):
+    user_id = user.user_id if user else (request.headers.get("X-User-Id") or data.get("userId") or 1)
+    user_role = user.role if user else (request.headers.get("X-User-Role") or data.get("userRole") or "Patient")
+    patient_id = data.get("patient_code") or data.get("patientId") or data.get("patient_id") or (user.patient_code if user else "PAT10000")
+
+    uid = int(user_id) if str(user_id).isdigit() else 1
+
+    # Validate quyền truy cập dữ liệu bệnh nhân
+    if not RBACService.validate_patient_access(uid, user_role, patient_id):
         return jsonify({
             "success": False,
-            "reply": "🔒 403 Forbidden: Bạn không có quyền truy cập dữ liệu của người thân này.",
-            "error": "Unauthorized patient access"
+            "reply": f"🔒 403 Forbidden: Bạn không có quyền truy cập dữ liệu của hồ sơ '{patient_id}'.",
+            "error": "Unauthorized patient access",
+            "forbidden": True
         }), 403
 
     conversation_id = data.get("conversationId") or f"user_session_{patient_id}"
@@ -39,7 +44,7 @@ def user_ai_chat():
             "reply": "⚠️ Bạn chưa nhập nội dung câu hỏi chăm sóc."
         }), 200
 
-    result = UserGeminiService.process_chat(
+    result = PatientAIService.process_chat(
         user_message=user_message,
         conversation_id=conversation_id,
         patient_id=patient_id,

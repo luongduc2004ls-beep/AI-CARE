@@ -21,23 +21,13 @@ const api = axios.create({
 });
 
 // ==========================================================
-// Request Interceptor: Tự động đính kèm Token và thông tin User Role
+// Request Interceptor: Tự động đính kèm Token Bearer
 // ==========================================================
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem("token");
+    const token = localStorage.getItem("elderly_ai_token") || localStorage.getItem("token");
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
-    }
-    const savedUser = localStorage.getItem("user");
-    if (savedUser) {
-      try {
-        const u = JSON.parse(savedUser);
-        if (u.role) config.headers["X-User-Role"] = u.role;
-        if (u.user_id || u.id) config.headers["X-User-Id"] = String(u.user_id || u.id);
-      } catch (e) {
-        // ignore parse error
-      }
     }
     return config;
   },

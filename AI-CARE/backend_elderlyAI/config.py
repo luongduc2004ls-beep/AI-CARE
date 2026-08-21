@@ -33,7 +33,12 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
     # Khóa bí mật dùng để mã hóa Session và JWT Tokens
-    SECRET_KEY = os.getenv("SECRET_KEY", "elderly_ai_secret_key_2026")
+    SECRET_KEY = os.getenv("SECRET_KEY", "elderly_ai_secret_key_jwt_secure_2026_salt_32bytes")
+    JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", SECRET_KEY)
+
+    # Cấu hình môi trường và chế độ Debug
+    DEBUG = os.getenv("DEBUG", "False").lower() in ("true", "1", "t")
+    FLASK_ENV = os.getenv("FLASK_ENV", "production")
 
     # Giữ nguyên thứ tự các key trong dữ liệu JSON trả về
     JSON_SORT_KEYS = False
@@ -45,7 +50,8 @@ class Config:
     BACKEND_PORT = int(os.getenv("BACKEND_PORT", "5000"))
 
     # Cấu hình CORS cho phép các domain Frontend kết nối
-    CORS_ORIGINS = "*"
+    raw_origins = os.getenv("FRONTEND_ORIGIN", "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000")
+    CORS_ORIGINS = [o.strip() for o in raw_origins.split(",") if o.strip()] or ["http://localhost:5173", "http://127.0.0.1:5173"]
 
     # --------------------------------------------------------------------------
     # Cấu hình Google Gemini AI API
