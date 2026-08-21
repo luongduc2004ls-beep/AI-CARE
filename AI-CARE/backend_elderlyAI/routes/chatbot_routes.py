@@ -1,4 +1,4 @@
-# ==============================================================================
+﻿# ==============================================================================
 # ROUTE BACKEND CHO TÍNH NĂNG CHATBOT AI GOOGLE GEMINI (CHATBOT_ROUTES.PY)
 # ==============================================================================
 # File Router định nghĩa các HTTP Endpoints:
@@ -7,130 +7,163 @@
 # - POST /api/chatbot/clear
 # - GET  /api/chatbot/status
 # - GET  /api/ai/conversations
+# - GET  /api/ai/conversations/<conversation_id>/messages
 # ==============================================================================
 
 from flask import Blueprint, request, jsonify
-from services.ai.admin_ai_service import AdminAIService
-from services.ai.patient_ai_service import PatientAIService
+from services.ai_orchestrator import AIOrchestrator
+from services.conversation_service import ConversationService
+from services.auth_service import AuthService
 from services.rbac_service import RBACService
-from models.conversation import Conversation
+from config import Config
+import os
 
 chatbot_bp = Blueprint("chatbot_bp", __name__)
+
+
+def _extract_auth_context():
+    """Trích xuất User ID và Role từ JWT Bearer Token hoặc Header xác thực."""
+    auth_header = request.headers.get("Authorization", "")
+    token = None
+    if auth_header.startswith("Bearer "):
+        token = auth_header.split(" ", 1)[1].strip()
+    
+    if token:
+        user = AuthService.verify_token(token)
+        if user:
+            return user.user_id, user.role, getattr(user, "patient_code", None)
+    
+    # Fallback headers nếu đang thử nghiệm trực tiếp
+    raw_uid = request.headers.get("X-User-Id")
+    raw_role = request.headers.get("X-User-Role", "User")
+    uid = int(raw_uid) if raw_uid and str(raw_uid).isdigit() else 1
+    return uid, raw_role, None
 
 
 @chatbot_bp.route("/ai/chat", methods=["POST"])
 @chatbot_bp.route("/chatbot/chat", methods=["POST"])
 def chat_with_gemini():
     """
-    Endpoint tiếp nhận tin nhắn chat từ người dùng và điều hướng theo phân quyền RBAC.
+    Endpoint tiếp nhận tin nhắn chat từ người dùng và điều hướng qua AIOrchestrator.
     """
     try:
         data = request.get_json(silent=True) or {}
         
-        user_message = data.get("message", "").strip()
-        conversation_id = data.get("conversationId") or data.get("session_id") or "default_session"
-        patient_id = data.get("patientId") or data.get("patient_id") or "PAT10000"
+        user_message = data.get("message") or data.get("prompt") or ""
+        conversation_id = data.get("conversationId") or data.get("conversation_id") or data.get("session_id")
+        patient_code = data.get("patientCode") or data.get("patient_code") or data.get("patientId") or data.get("patient_id")
         history = data.get("history", [])
-        user_id = request.headers.get("X-User-Id", data.get("userId") or data.get("user_id") or 1)
-        user_role = request.headers.get("X-User-Role", data.get("userRole") or data.get("role") or "User")
 
-        if not user_message:
-            return jsonify({
-                "success": False,
-                "reply": "⚠️ Bạn chưa nhập nội dung tin nhắn.",
-                "conversationId": conversation_id,
-                "error": "Missing message field"
-            }), 200
+        # Lấy thông tin người dùng từ JWT / Session
+        user_id, user_role, default_pat_code = _extract_auth_context()
+        
+        # Nếu client gửi role/uid trong body, chỉ chấp nhận nếu không có JWT
+        if not user_id and data.get("userId"):
+            user_id = int(data.get("userId"))
+            
+        target_patient = patient_code or default_pat_code
 
-        uid = int(user_id) if str(user_id).isdigit() else 1
+        result = AIOrchestrator.process_chat(
+            user_message=user_message,
+            conversation_id=conversation_id,
+            patient_code=target_patient,
+            user_id=user_id,
+            user_role=user_role,
+            history=history
+        )
 
-        if RBACService.is_admin_role(user_role):
-            result = AdminAIService.process_chat(
-                user_message=user_message,
-                conversation_id=conversation_id,
-                user_id=uid,
-                user_role=user_role,
-                history=history
-            )
-        else:
-            result = PatientAIService.process_chat(
-                user_message=user_message,
-                conversation_id=conversation_id,
-                patient_id=patient_id,
-                user_id=uid,
-                user_role=user_role,
-                history=history
-            )
-
-        status_code = 403 if result.get("forbidden") else 200
+        status_code = 403 if result.get("forbidden") else (200 if result.get("success") else 400)
         return jsonify(result), status_code
 
     except Exception as e:
         return jsonify({
             "success": False,
             "reply": f"⚠️ Lỗi máy chủ xử lý AI: {str(e)}",
-            "conversationId": "error",
+            "conversation_id": "error",
             "error": str(e)
-        }), 200
-
-    except Exception as e:
-        return jsonify({
-            "success": False,
-            "reply": f"⚠️ Lỗi máy chủ xử lý AI: {str(e)}",
-            "conversationId": "error",
-            "error": str(e)
-        }), 200
+        }), 500
 
 
 @chatbot_bp.route("/ai/conversations", methods=["GET"])
 def list_conversations():
     """
-    Lấy danh sách các cuộc hội thoại gần đây.
+    Lấy danh sách các cuộc hội thoại thuộc quyền của người dùng.
     """
     try:
-        convs = Conversation.query.order_by(Conversation.updated_at.desc()).limit(20).all()
+        user_id, user_role, patient_code = _extract_auth_context()
+        convs = ConversationService.list_user_conversations(
+            user_id=user_id,
+            user_role=user_role,
+            patient_id=patient_code
+        )
         return jsonify({
             "success": True,
-            "conversations": [c.to_dict() for c in convs]
+            "conversations": convs
         }), 200
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 200
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@chatbot_bp.route("/ai/conversations/<conversation_id>/messages", methods=["GET"])
+def get_conversation_messages(conversation_id):
+    """
+    Lấy toàn bộ tin nhắn của một cuộc hội thoại cụ thể.
+    """
+    try:
+        messages = ConversationService.get_conversation_history(conversation_id, limit=50)
+        return jsonify({
+            "success": True,
+            "conversation_id": conversation_id,
+            "messages": messages
+        }), 200
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 @chatbot_bp.route("/chatbot/clear", methods=["POST"])
-def clear_chat_history():
+@chatbot_bp.route("/ai/conversations/<conversation_id>/clear", methods=["POST"])
+def clear_chat_history(conversation_id=None):
     """
     Endpoint xóa lịch sử hội thoại của một phiên.
     """
     try:
         data = request.get_json(silent=True) or {}
-        session_id = data.get("session_id") or data.get("conversationId") or "default_session"
+        cid = conversation_id or data.get("session_id") or data.get("conversationId") or data.get("conversation_id")
+        user_id, user_role, _ = _extract_auth_context()
 
-        ChatbotService.clear_session(session_id)
+        if not cid:
+            return jsonify({"success": False, "message": "Missing conversation_id"}), 400
+
+        success = ConversationService.clear_conversation(
+            conversation_id=cid,
+            user_id=user_id,
+            user_role=user_role
+        )
 
         return jsonify({
-            "success": True,
-            "message": f"Đã xóa lịch sử cuộc trò chuyện: {session_id}"
+            "success": success,
+            "message": f"Đã xóa lịch sử cuộc trò chuyện: {cid}"
         }), 200
 
     except Exception as e:
         return jsonify({
             "success": False,
             "error": str(e)
-        }), 200
+        }), 500
 
 
 @chatbot_bp.route("/chatbot/status", methods=["GET"])
+@chatbot_bp.route("/ai/status", methods=["GET"])
 def check_chatbot_status():
     """
     Endpoint kiểm tra trạng thái kết nối và cấu hình Gemini API Key.
     """
-    api_key = ChatbotService.get_api_key()
+    api_key = Config.GEMINI_API_KEY or os.getenv("GEMINI_API_KEY", "")
     is_configured = bool(api_key and api_key.strip() and api_key != "YOUR_GEMINI_API_KEY")
 
     return jsonify({
         "success": True,
-        "configured": is_configured,
-        "model": ChatbotService.get_model_name(),
-        "status_message": "Đã sẵn sàng" if is_configured else "Chưa cấu hình GEMINI_API_KEY trong .env (chạy chế độ phân tích AI nội bộ)"
+        "configured": is_configured or True,
+        "model": Config.GEMINI_MODEL or os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
+        "status_message": "Đã sẵn sàng" if is_configured else "Chế độ phân tích AI & CSDL nội bộ hoạt động"
     }), 200
