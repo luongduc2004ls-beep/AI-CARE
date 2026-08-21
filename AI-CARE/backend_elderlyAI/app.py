@@ -140,17 +140,30 @@ def create_tables_if_database_is_ready():
 
 
 @app.route("/")
+@app.route("/api")
+@app.route("/api/")
 def home():
     """
-    Endpoint mặc định kiểm tra thông tin thông số Backend.
+    Endpoint mặc định kiểm tra thông tin thông số Backend và danh mục API Gateway.
     """
     return {
-        "project": "Elderly AI Backend",
+        "success": True,
+        "project": "ElderlyCare AI Backend API",
         "version": "1.0",
         "status": "Running",
+        "frontend_url": "http://localhost:5173",
         "database": get_database_status(),
-        "gemini_chatbot": "Ready at /api/chatbot/chat and /chat"
-    }
+        "endpoints": {
+            "auth": "/api/auth/login",
+            "patients": "/api/patients",
+            "medicines": "/api/medicines",
+            "dashboard": "/api/dashboard/summary",
+            "admin_ai": "/api/admin/ai/chat",
+            "patient_ai": "/api/user/ai/chat",
+            "cameras": "/api/cameras",
+            "alerts": "/api/admin/alerts"
+        }
+    }, 200
 
 
 @app.route("/health")
