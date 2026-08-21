@@ -1,10 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
-import axios from "axios";
+import api from "../services/api";
 import { useAuth } from "./AuthContext";
-
-const API_BASE_URL = window.location.hostname.includes("serveousercontent.com") || window.location.protocol === "https:"
-  ? "https://3318293df04c7371-171-255-66-135.serveousercontent.com/api"
-  : `http://${window.location.hostname || "localhost"}:5000/api`;
 
 const PatientContext = createContext(null);
 
@@ -17,14 +13,14 @@ export const PatientProvider = ({ children }) => {
   const [loading, setLoading] = useState(false);
 
   const loadPatients = useCallback(async () => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated || !currentUser) return;
     setLoading(true);
     try {
       const endpoint = isAdmin ? "/patients?per_page=50" : "/my/patients";
-      const res = await axios.get(`${API_BASE_URL}${endpoint}`, {
+      const res = await api.get(endpoint, {
         params: { userId: currentUser?.user_id, userRole: currentUser?.role || "User" }
       });
-      const items = res.data?.items || res.data?.data?.items || res.data?.data || [];
+      const items = res?.items || res?.data?.items || res?.data || [];
       setAssignedPatients(items);
 
       if (items.length > 0) {

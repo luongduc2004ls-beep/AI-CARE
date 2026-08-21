@@ -123,12 +123,12 @@ def user_ai_status():
     """
     Kiểm tra trạng thái cấu hình Gemini AI User.
     """
-    api_key = UserGeminiService.get_api_key()
+    api_key = PatientAIService.get_api_key()
     is_configured = bool(api_key and api_key.strip() and api_key != "YOUR_GEMINI_API_KEY")
     return jsonify({
         "success": True,
         "role": "USER",
         "configured": is_configured,
-        "model": UserGeminiService.get_model_name(),
+        "model": PatientAIService.get_model_name(),
         "status_message": "Trợ lý Chăm Sóc đã sẵn sàng" if is_configured else "Chế độ chăm sóc nội bộ"
     }), 200

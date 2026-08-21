@@ -130,12 +130,12 @@ def admin_ai_status():
     """
     Kiểm tra trạng thái cấu hình Gemini AI Admin.
     """
-    api_key = AdminGeminiService.get_api_key()
+    api_key = AdminAIService.get_api_key()
     is_configured = bool(api_key and api_key.strip() and api_key != "YOUR_GEMINI_API_KEY")
     return jsonify({
         "success": True,
         "role": "ADMIN",
         "configured": is_configured,
-        "model": AdminGeminiService.get_model_name(),
+        "model": AdminAIService.get_model_name(),
         "status_message": "Admin AI đã sẵn sàng" if is_configured else "Chế độ phân tích quản trị nội bộ"
     }), 200
