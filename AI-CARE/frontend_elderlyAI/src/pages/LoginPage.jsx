@@ -9,7 +9,7 @@ const LoginPage = () => {
   const { themeMode, changeThemeMode } = useTheme();
   const navigate = useNavigate();
 
-  const [username, setUsername] = useState("admin");
+  const [username, setUsername] = useState("admin1");
   const [password, setPassword] = useState("password123");
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -154,7 +154,7 @@ const LoginPage = () => {
 
           {/* Quick Login Presets */}
           <div className="pt-3 border-top">
-            <span className="small text-body-secondary d-block mb-2 text-center fw-semibold">Đăng nhập nhanh tài khoản trong bộ dữ liệu Excel (1,000 users & 5 admins):</span>
+            <span className="small text-body-secondary d-block mb-2 text-center fw-semibold">Đăng nhập nhanh tài khoản mẫu:</span>
             <div className="d-grid gap-2">
               <button
                 type="button"
@@ -168,10 +168,10 @@ const LoginPage = () => {
               <button
                 type="button"
                 className="btn btn-body border text-start p-2 px-3 rounded-pill shadow-sm d-flex align-items-center justify-content-between gap-2"
-                onClick={() => handleQuickLogin("user1", "password123")}
+                onClick={() => handleQuickLogin("user_pat10000", "password123")}
               >
                 <span className="small text-body fw-bold">🔑 Người Dùng / Gia Đình</span>
-                <span className="badge bg-success text-white font-monospace extra-small">user1 / password123</span>
+                <span className="badge bg-success text-white font-monospace extra-small">user_pat10000 / password123</span>
               </button>
             </div>
             <small className="text-muted d-block text-center mt-2 extra-small">

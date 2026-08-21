@@ -63,8 +63,8 @@ function AppContent() {
     />
   );
 
-  // Nếu là trang Login hoặc Register thì chỉ hiển thị giao diện Auth
-  if (isAuthPage) {
+  // Nếu chưa đăng nhập hoặc đang ở trang Auth -> Hiển thị giao diện Đăng nhập / Đăng ký
+  if (!isAuthenticated || isAuthPage) {
     return (
       <Routes>
         <Route path="/login" element={<LoginPage />} />
