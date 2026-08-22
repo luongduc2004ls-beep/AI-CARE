@@ -14,20 +14,28 @@ class Config:
     """
     
     # --------------------------------------------------------------------------
-    # Cấu hình Cơ sở dữ liệu MySQL / MariaDB
+    # Cấu hình Cơ sở dữ liệu MySQL / SQLite
     # --------------------------------------------------------------------------
+    BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+    INSTANCE_DIR = os.path.join(BASE_DIR, "instance")
+    os.makedirs(INSTANCE_DIR, exist_ok=True)
+    DEFAULT_SQLITE_PATH = os.path.join(INSTANCE_DIR, "elderly_ai.db")
+
     DB_USER = os.getenv("DB_USER", "root")
     DB_PASSWORD = os.getenv("DB_PASSWORD", "")
     DB_HOST = os.getenv("DB_HOST", "localhost")
+    DB_PORT = os.getenv("DB_PORT", "3306")
     DB_NAME = os.getenv("DB_NAME", "ElderlyCareAI")
 
-    encoded_password = quote_plus(DB_PASSWORD) if DB_PASSWORD else ""
-
-    # Đường dẫn URI kết nối CSDL sử dụng PyMySQL làm driver
-    SQLALCHEMY_DATABASE_URI = os.getenv(
-        "SQLALCHEMY_DATABASE_URI",
-        f"mysql+pymysql://{DB_USER}:{encoded_password}@{DB_HOST}/{DB_NAME}"
-    )
+    custom_uri = os.getenv("SQLALCHEMY_DATABASE_URI")
+    if custom_uri:
+        SQLALCHEMY_DATABASE_URI = custom_uri
+    elif os.getenv("USE_MYSQL", "false").lower() in ("true", "1") or (os.getenv("DB_PASSWORD") and os.getenv("DB_USER")):
+        encoded_password = quote_plus(DB_PASSWORD) if DB_PASSWORD else ""
+        SQLALCHEMY_DATABASE_URI = f"mysql+pymysql://{DB_USER}:{encoded_password}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+    else:
+        # Mặc định dùng SQLite instance/elderly_ai.db để chạy ngay lập tức trên mọi máy tính mà không cần cài đặt MySQL
+        SQLALCHEMY_DATABASE_URI = f"sqlite:///{DEFAULT_SQLITE_PATH}"
 
     # Tắt tính năng theo dõi biến đổi đối tượng của SQLAlchemy để tối ưu hiệu năng
     SQLALCHEMY_TRACK_MODIFICATIONS = False

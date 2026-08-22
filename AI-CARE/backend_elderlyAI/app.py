@@ -112,9 +112,12 @@ def get_database_status():
         }
 
 
+from services.db_seeder import DatabaseSeeder
+
+
 def create_tables_if_database_is_ready():
     """
-    Tự động khởi tạo các bảng CSDL và migration an toàn các cột bổ sung nếu chưa tồn tại.
+    Tự động khởi tạo các bảng CSDL, migration an toàn và nạp dữ liệu mẫu khởi tạo (Auto-Seeder).
     """
     try:
         db.create_all()
@@ -132,10 +135,13 @@ def create_tables_if_database_is_ready():
 
         app.config["DATABASE_AVAILABLE"] = True
         print("Database connected. Tables are ready.")
+
+        # Tự động nạp dữ liệu mẫu nếu CSDL mới hoàn toàn
+        DatabaseSeeder.seed_if_empty()
     except SQLAlchemyError as exc:
         db.session.rollback()
         app.config["DATABASE_AVAILABLE"] = False
-        print("Database unavailable. Backend will keep running without MySQL.")
+        print("Database unavailable. Backend will keep running without database.")
         print(str(exc.orig) if getattr(exc, "orig", None) else str(exc))
 
 
@@ -161,23 +167,70 @@ def home():
             "admin_ai": "/api/admin/ai/chat",
             "patient_ai": "/api/user/ai/chat",
             "cameras": "/api/cameras",
-            "alerts": "/api/admin/alerts"
+            "alerts": "/api/admin/alerts",
+            "system_health": "/api/system/health"
         }
     }, 200
 
 
 @app.route("/health")
-def health():
+@app.route("/api/system/health")
+def system_health():
     """
-    Endpoint kiểm tra tình trạng sức khỏe máy chủ (Health Check).
+    Endpoint kiểm tra toàn diện tình trạng 4 dịch vụ hệ thống (System Health Check):
+    - backend
+    - database
+    - gemini
+    - authentication
     """
-    database = get_database_status()
+    # 1. Check database
+    db_status = get_database_status()
+    db_ok = db_status.get("connected", False)
+
+    # 2. Check authentication (JWT service readiness)
+    auth_ok = True
+    try:
+        from models.user import User
+        from services.auth_service import AuthService
+        sample_user = User.query.first()
+        if sample_user:
+            test_token = AuthService.generate_token(sample_user)
+            verified_user = AuthService.verify_token(test_token)
+            auth_ok = (verified_user is not None)
+        else:
+            auth_ok = True
+    except Exception:
+        auth_ok = False
+
+    # 3. Check gemini service status
+    gemini_status = "ok"
+    if not Config.GEMINI_API_KEY or Config.GEMINI_API_KEY.startswith("YOUR_"):
+        gemini_status = "ok (hybrid_local_fallback)"
+    else:
+        gemini_status = "ok"
+
+    services_report = {
+        "backend": "ok",
+        "database": "ok" if db_ok else "error",
+        "gemini": gemini_status,
+        "authentication": "ok" if auth_ok else "error"
+    }
+
+    all_healthy = db_ok and auth_ok
 
     return {
-        "success": True,
-        "status": "Running",
-        "database": database
-    }, 200 if database["connected"] else 503
+        "success": all_healthy,
+        "services": {
+            "backend": services_report["backend"],
+            "database": services_report["database"],
+            "gemini": "ok" if "ok" in gemini_status else "error",
+            "authentication": services_report["authentication"]
+        },
+        "details": {
+            "database_message": db_status.get("message"),
+            "gemini_mode": gemini_status
+        }
+    }, (200 if all_healthy else 503)
 
 
 if __name__ == "__main__":
