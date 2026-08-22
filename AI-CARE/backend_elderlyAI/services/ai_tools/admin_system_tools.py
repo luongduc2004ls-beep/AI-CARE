@@ -368,6 +368,8 @@ def _format_patient_list_result(query_obj, page: int = 1, limit: int = 20) -> Di
         "page": page,
         "limit": limit,
         "total_pages": total_pages,
+        "has_next": page < total_pages,
+        "has_previous": page > 1,
         "results": results
     }
 
@@ -460,6 +462,47 @@ def search_patients_by_health_status(status_criteria: str, page: int = 1, limit:
     res = _format_patient_list_result(base_q, page, limit)
     _log_admin_tool("search_patients_by_health_status", f"Status: {status_criteria}", res["total"])
     return res
+
+
+def search_unmedicated_patients(date_str: str = None, page: int = 1, limit: int = 20) -> Dict[str, Any]:
+    today = date.today()
+    schedules = MedicineSchedule.query.filter(
+        MedicineSchedule.status == "Chưa uống"
+    ).all()
+
+    total = len(schedules)
+    page = max(1, page)
+    limit = max(1, min(100, limit))
+    total_pages = math.ceil(total / limit) if total > 0 else 1
+
+    paged = schedules[(page - 1) * limit : page * limit]
+    results = []
+    for s in paged:
+        u = db.session.get(User, s.user_id) if s.user_id else None
+        p_code = u.patient_code if u else f"PAT{s.user_id:05d}"
+        p_name = u.full_name if u else "Bệnh nhân"
+        dict_rep = s.to_dict()
+        results.append({
+            "schedule_id": s.schedule_id,
+            "patient_code": p_code,
+            "patient_name": p_name,
+            "medicine_name": dict_rep.get("medicine_name", "Thuốc chỉ định"),
+            "dosage": dict_rep.get("dosage", "1 viên"),
+            "time": dict_rep.get("time", "08:00"),
+            "status": s.status
+        })
+
+    _log_admin_tool("search_unmedicated_patients", f"Date: {today}", total)
+    return {
+        "success": True,
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "total_pages": total_pages,
+        "has_next": page < total_pages,
+        "has_previous": page > 1,
+        "results": results
+    }
 
 
 def get_system_statistics() -> Dict[str, Any]:
@@ -821,5 +864,6 @@ ADMIN_TOOL_DISPATCHER = {
     "get_system_statistics": get_system_statistics,
     "get_system_alerts": get_system_alerts,
     "get_camera_status": get_camera_status,
-    "get_recent_alerts": get_recent_alerts
+    "get_recent_alerts": get_recent_alerts,
+    "search_unmedicated_patients": search_unmedicated_patients
 }

@@ -5,7 +5,7 @@
 // 1. Phân quyền RBAC (Admin Scope vs Patient Scope)
 // 2. Tách biệt bộ nhớ hội thoại theo Người dùng & Bệnh nhân
 // 3. Render Markdown y khoa chuẩn xác (bảng biểu, danh sách, in đậm)
-// 4. Quick Suggestions linh hoạt theo Vai Trò
+// 4. Quick Suggestions linh hoạt theo Vai Trò (Y khoa & CSDL)
 // 5. Nguồn dữ liệu minh bạch (Database / Medical Knowledge / Mixed)
 // ==============================================================================
 
@@ -44,21 +44,22 @@ export default function ChatbotWidget() {
   const quickSuggestions = useMemo(() => {
     if (isAdmin) {
       return [
-        "👥 Bệnh nhân nào dị ứng phấn hoa?",
-        "💊 Bệnh nhân nào chưa uống thuốc hôm nay?",
-        "⚠️ Cảnh báo nguy hiểm trong 24 giờ qua?",
-        "📹 Có camera nào đang offline không?",
-        "📊 Thống kê tổng số bệnh nhân toàn viện?"
+        "👥 Những bệnh nhân có khả năng ngã cao",
+        "🌸 Những bệnh nhân dị ứng phấn hoa",
+        "💊 Ai chưa uống thuốc hôm nay?",
+        "⚠️ Có bao nhiêu bệnh nhân nguy cơ té ngã cao?",
+        "📹 Camera nào đang offline?",
+        "📊 Báo cáo hệ thống toàn viện"
       ];
     }
     return [
-      `💊 ${activePatientCode} hôm nay có lịch uống thuốc gì?`,
-      `❤️ Chỉ số sinh hiệu của ${activePatientCode} hôm nay?`,
-      "🥗 Người cao tuổi bị đầy bụng nên ăn gì?",
-      "⚠️ Dấu hiệu nhận biết đột quỵ sớm FAST?",
-      "🏃 Bài tập vận động nhẹ nhàng phòng té ngã?"
+      "❤️ Sức khỏe hôm nay của tôi thế nào?",
+      "💊 Thuốc hôm nay của tôi",
+      "🥗 Bệnh nhân tiểu đường nên ăn gì?",
+      "🏃 Người cao tuổi nên tập thể dục bao lâu?",
+      "⚠️ Dấu hiệu cảnh báo sớm đột quỵ là gì?"
     ];
-  }, [isAdmin, activePatientCode]);
+  }, [isAdmin]);
 
   // Khởi tạo tin nhắn chào mừng hoặc tải lịch sử khi đổi phiên hội thoại
   useEffect(() => {
@@ -85,8 +86,8 @@ export default function ChatbotWidget() {
 
       // Lời chào mặc định theo Role
       const welcomeText = isAdmin
-        ? `Xin chào **${currentUser?.full_name || "Quản trị viên"}**! Tôi là **Trợ lý Y Tế & Quản Trị Hệ Thống ElderlyCare**. Tôi có thể hỗ trợ tra cứu bệnh nhân, kiểm tra thuốc, phân tích sinh hiệu và thống kê toàn viện.`
-        : `Xin chào! Tôi là **Trợ lý Y Tế AI ElderlyCare**. Tôi đang theo dõi hồ sơ của **${activePatientName}** (${activePatientCode}). Tôi có thể hỗ trợ giải đáp thuốc, lịch uống, sinh hiệu hoặc tư vấn sức khỏe.`;
+        ? `Xin chào **${currentUser?.full_name || "Quản trị viên"}**! Tôi là **Trợ lý Y Tế & Quản Trị Hệ Thống ElderlyCare AI**.\n\nTôi có thể hỗ trợ bạn:\n- 👥 **Tra cứu CSDL**: Danh sách bệnh nhân nguy cơ ngã cao, dị ứng, cữ thuốc chưa uống\n- 🩺 **Y khoa Lâm sàng**: Chế độ dinh dưỡng, xử trí cấp cứu đột quỵ, dược lý thuốc\n- 📊 **Quản trị hệ thống**: Báo cáo telemetry camera, thống kê toàn viện.`
+        : `Xin chào! Tôi là **Trợ lý Y Tế AI ElderlyCare** đồng hành cùng **${activePatientName}** (${activePatientCode}).\n\nBạn có thể hỏi tôi về:\n- 💊 Lịch uống thuốc và đơn thuốc hôm nay\n- ❤️ Chỉ số huyết áp, nhịp tim và SpO₂\n- 🥗 Chế độ ăn uống dinh dưỡng phù hợp\n- 🏃 Bài tập vận động thể dục an toàn.`;
 
       if (isMounted) {
         setMessages([
@@ -205,10 +206,10 @@ export default function ChatbotWidget() {
     let cls = "bg-info-subtle text-info border";
 
     if (src === "database") {
-      label = "🗄️ Dữ Liệu CSDL";
+      label = "🗄️ CSDL Bệnh Viện";
       cls = "bg-primary-subtle text-primary border";
     } else if (src.includes("database") && src.includes("medical")) {
-      label = "🩺 CSDL + Y Khoa";
+      label = "🩺 CSDL + Y Khoa Lâm Sàng";
       cls = "bg-success-subtle text-success border";
     } else if (src === "system_data") {
       label = "📊 Quản Trị Hệ Thống";

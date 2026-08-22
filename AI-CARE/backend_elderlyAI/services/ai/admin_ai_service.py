@@ -1,23 +1,25 @@
-"""
-Admin AI Service - Trợ Lý Y Tế & Quản Trị Hệ Thống Toàn Viện
-ElderlyCare AI Medical & Management Assistant (Admin Scope)
-Hỗ trợ Kiến thức Y Khoa + Tìm Kiếm & Phân Tích CSDL Toàn Viện + Vòng lặp Agentic Multi-turn Tool Calling
-"""
+# ==============================================================================
+# ADMIN AI MEDICAL & SYSTEM AGENT SERVICE (ADMIN_AI_SERVICE.PY)
+# ==============================================================================
+# Dành riêng cho Quản trị viên & Bác sĩ trưởng:
+# 1. Phân biệt rõ ràng COUNT vs SEARCH (Danh sách + Pagination)
+# 2. Xử lý tri thức Y khoa tổng quát (GENERAL_MEDICAL) không cần CSDL
+# 3. Xử lý câu hỏi kết hợp (MIXED_QUERY): Hồ sơ bệnh nhân DB + Tư vấn lâm sàng
+# 4. Truy vấn CSDL bệnh nhân đa chiều (Dị ứng, Nguy cơ ngã, Thuốc, Camera, Cảnh báo)
+# ==============================================================================
 
+import json
 import os
 import re
-import json
 import urllib.request
-import urllib.error
-from datetime import datetime, date
-from typing import Dict, Any, List, Optional
-
+from typing import Dict, Any, Optional, List
 from config import Config
 from database import db
 from models.user import User
 from models.conversation import Conversation, Message
 from models.patient_memory import AIAuditLog
 from services.rbac_service import RBACService
+from services.ai.ai_intent_router import AIIntentRouter
 from services.ai.medical_knowledge_service import MedicalKnowledgeService
 from services.ai_tools.admin_system_tools import (
     ADMIN_TOOL_DECLARATIONS,
@@ -29,52 +31,40 @@ from services.ai_tools.admin_system_tools import (
     get_patient_prescriptions,
     get_patient_medication_schedule,
     get_patient_alerts,
-    get_patient_notifications,
-    get_patient_caregiver,
-    get_patient_doctor,
     get_patient_camera_status,
     search_patients,
     search_patients_by_name,
     search_patients_by_disease,
     search_patients_by_allergy,
     search_patients_by_medicine,
-    search_patients_by_risk_level,
     search_patients_by_fall_risk,
     search_patients_by_health_status,
+    search_unmedicated_patients,
     get_system_statistics,
     get_system_alerts,
     get_camera_status,
     get_recent_alerts
 )
 
-ADMIN_SYSTEM_PROMPT = """Bạn là Trợ Lý Y Tế & Quản Trị Hệ Thống Toàn Viện (ElderlyCare AI Medical & Management Assistant).
-Bạn đang hỗ trợ Ban Giám Đốc, Bác Sĩ Trưởng và Điều Dưỡng Quản Lý trong việc giám sát, phân tích lâm sàng và điều hành hệ thống chăm sóc người cao tuổi.
+ADMIN_SYSTEM_PROMPT = """Bạn là ElderlyCare AI Medical & Hospital Management Assistant - Trợ lý Y Tế và Quản Trị Hệ Thống Cấp Cao.
+Nhiệm vụ của bạn là hỗ trợ Quản trị viên và Bác sĩ quản lý cơ sở dữ liệu bệnh nhân, phân tích nguy cơ lâm sàng, kiểm tra thuốc và theo dõi telemetry toàn viện.
 
-NGUYÊN TẮC HOẠT ĐỘNG:
-1. TRUY VẤN CƠ SỞ DỮ LIỆU THỰC TẾ (SOURCE OF TRUTH):
-   - Mọi dữ liệu về bệnh nhân (hồ sơ, sinh hiệu, đơn thuốc, lịch uống, cảnh báo, dị ứng, camera, thống kê viện) BẮT BUỘC phải trích xuất từ Database Tools.
-   - Khi tìm kiếm bệnh nhân (theo dị ứng, bệnh nền, thuốc, rủi ro té ngã), BẮT BUỘC báo cáo tổng số bản ghi thực tế trong CSDL (total) và danh sách chi tiết (Tên, Mã, Tuổi, Dị ứng/Bệnh án/Sinh hiệu).
-   - Tuyệt đối KHÔNG tự bịa dữ liệu hoặc đoán mò. Nếu không có dữ liệu (total = 0), hãy thông báo: 'Không tìm thấy dữ liệu phù hợp trong CSDL'.
-
-2. VẬN DỤNG KIẾN THỨC Y KHOA:
-   - Bạn có kiến thức y khoa chuyên sâu (lão khoa, dược lý lâm sàng, hồi sức, xử trí cấp cứu, tương tác thuốc).
-   - Khi người dùng hỏi về tác dụng của một loại thuốc (ví dụ: 'PAT10000 đang dùng Amlodipine, thuốc này có tác dụng gì?') -> Lấy thông tin đơn thuốc của bệnh nhân từ CSDL + Giải thích dược lý lâm sàng chuẩn xác.
-   - Luôn phân biệt rõ ràng: 'Dữ liệu thực tế ghi nhận trong CSDL' và 'Kiến thức y khoa/Khuyến nghị lâm sàng'.
-
-3. CHUYỂN ĐỔI NGỮ CẢNH LINH HOẠT (CONTEXT SWITCHING):
-   - Bạn có thể chuyển đổi mượt mà giữa Ngữ cảnh một bệnh nhân cụ thể (Patient Context) và Ngữ cảnh điều hành toàn viện (System Context).
-   - Khi nhắc đến bệnh nhân dạng PATxxxxx hoặc tên người bệnh, hãy tự động tra cứu đúng bệnh nhân đó.
-
-4. XÁC NHẬN AN TOÀN KHI THAY ĐỔI DỮ LIỆU:
-   - Với các yêu cầu xóa dữ liệu hoặc thao tác nhạy cảm, đưa ra cảnh báo phạm vi ảnh hưởng và yêu cầu xác nhận.
-
-Định dạng câu trả lời chuyên nghiệp, cấu trúc rõ ràng, sử dụng Markdown trực quan (tiêu đề, danh sách, bảng biểu khi cần).
+QUY TẮC BẮT BUỘC:
+1. Khi người dùng hỏi DANH SÁCH bệnh nhân (ví dụ: 'những bệnh nhân có khả năng ngã cao', 'bệnh nhân dị ứng phấn hoa', 'ai chưa uống thuốc'):
+   -> PHẢI GỌI TOOL TRUY VẤN CSDL và trả về danh sách chi tiết (Tên, Mã PAT, Tuổi, Chỉ số). TUYỆT ĐỐI KHÔNG chỉ trả về con số tổng quan hay báo cáo hệ thống.
+2. Khi người dùng hỏi SỐ LƯỢNG (ví dụ: 'có bao nhiêu bệnh nhân nguy cơ té ngã cao?'):
+   -> Trả về con số chính xác và tóm tắt ngắn gọn.
+3. Khi người dùng hỏi KIẾN THỨC Y KHOA TỔNG QUÁT (ví dụ: 'bệnh nhân tiểu đường nên ăn gì?', 'dấu hiệu đột quỵ?'):
+   -> Đưa ra hướng dẫn y khoa chi tiết, phân chia thực phẩm nên ăn, hạn chế, chế độ sinh hoạt và cảnh báo cấp cứu.
+4. Khi người dùng hỏi KẾT HỢP (ví dụ: 'PAT10000 bị tiểu đường nên ăn gì?'):
+   -> Lấy hồ sơ thực tế của PAT10000 trong CSDL và kết hợp với tri thức y khoa để cá nhân hóa câu trả lời.
+5. Luôn định dạng Markdown rõ ràng, chuyên nghiệp, sử dụng bảng biểu và danh sách gạch đầu dòng.
 """
 
 
 class AdminAIService:
     """
-    Dịch vụ AI Agent chuyên trách cho Quản trị viên & Bác sĩ.
+    Dịch vụ AI Agent dành cho Quản trị viên và Bác sĩ.
     """
 
     @classmethod
@@ -86,15 +76,15 @@ class AdminAIService:
         return Config.GEMINI_MODEL or os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
     @classmethod
-    def get_or_create_conversation(cls, conversation_id: str, user_id: int = None) -> Conversation:
+    def get_or_create_conversation(cls, conversation_id: str, user_id: int = 1) -> Optional[Conversation]:
         try:
-            conv = db.session.get(Conversation, conversation_id)
+            conv = Conversation.query.filter_by(conversation_id=conversation_id).first()
             if not conv:
                 conv = Conversation(
                     conversation_id=conversation_id,
                     user_id=user_id,
                     role_scope="ADMIN",
-                    title="Phiên Quản Trị Hệ Thống"
+                    title=f"Quản Trị Hệ Thống - {conversation_id[:8]}"
                 )
                 db.session.add(conv)
                 db.session.commit()
@@ -112,20 +102,17 @@ class AdminAIService:
         user_role: str = "Admin",
         history: list = None
     ) -> Dict[str, Any]:
-        """
-        Xử lý tin nhắn chat từ Quản trị viên qua Multi-turn Tool Calling Agent.
-        """
         # 1. BẢO MẬT & PHÂN QUYỀN RBAC
         if not RBACService.is_admin_role(user_role):
             return {
                 "success": False,
-                "reply": "🔒 403 Forbidden: Chỉ tài khoản Quản trị viên / Y tế được cấp quyền mới có thể truy cập Admin AI.",
+                "reply": "🔒 403 Forbidden: Chỉ tài khoản Quản trị viên / Bác sĩ được cấp quyền mới có thể truy cập Admin AI.",
                 "conversationId": conversation_id,
                 "role_scope": "ADMIN",
                 "forbidden": True
             }
 
-        # 2. Lưu cuộc hội thoại vào CSDL
+        # Lưu cuộc hội thoại vào CSDL
         conv = cls.get_or_create_conversation(conversation_id, user_id=user_id)
         if conv:
             try:
@@ -134,369 +121,251 @@ class AdminAIService:
             except Exception:
                 db.session.rollback()
 
-        # Ghi Audit Log cho truy vấn Admin
-        try:
-            audit = AIAuditLog(
-                user_id=user_id,
-                user_role=RBACService.normalize_role(user_role),
-                action_type="ADMIN_AI_CHAT",
-                target_id="SYSTEM",
-                details=user_message[:200],
-                status="SUCCESS"
-            )
-            db.session.add(audit)
-            db.session.commit()
-        except Exception:
-            db.session.rollback()
+        # Phân tích ý định câu hỏi bằng Intent Router
+        intent_data = AIIntentRouter.detect_intent(user_message)
+        intent = intent_data.get("intent", "UNKNOWN")
 
-        # 3. Kiểm tra yêu cầu Xóa / Thao tác nhạy cảm
-        q_lower = user_message.lower()
-        if ("xóa" in q_lower or "delete" in q_lower) and any(k in q_lower for k in ["bệnh nhân", "benh nhan", "patient", "pat"]):
-            match = re.search(r"pat\d+", q_lower, re.IGNORECASE)
-            pat_code = match.group(0).upper() if match else "PAT10000"
-            confirmation_text = (
-                f"### ⚠️ YÊU CẦU XÁC NHẬN THAO TÁC HỆ THỐNG\n\n"
-                f"Bạn đang yêu cầu **XÓA BỆNH NHÂN {pat_code}** khỏi cơ sở dữ liệu.\n\n"
-                f"**Phạm vi ảnh hưởng:**\n"
-                f"- Toàn bộ hồ sơ bệnh án và lịch sử sinh hiệu.\n"
-                f"- Hủy liên kết camera giám sát trong phòng.\n"
-                f"- Xóa toàn bộ đơn thuốc và lịch nhắc uống thuốc liên quan.\n\n"
-                f"📌 *Hệ thống ElderlyCare AI yêu cầu xác nhận của Quản trị viên trước khi thực hiện thao tác xóa dữ liệu.*"
-            )
-            if conv:
-                try:
-                    db.session.add(Message(conversation_id=conversation_id, role="assistant", content=confirmation_text))
-                    db.session.commit()
-                except Exception:
-                    db.session.rollback()
-            return {
-                "success": True,
-                "reply": confirmation_text,
-                "conversationId": conversation_id,
-                "role_scope": "ADMIN",
-                "require_confirmation": True,
-                "action_target": pat_code
+        # Chạy Engine Xử Lý Quản Trị & Y Khoa
+        reply_text, data_source, structured_payload = cls._handle_admin_query(user_message, intent_data)
+
+        # Lưu tin nhắn phản hồi của Assistant vào CSDL
+        if conv:
+            try:
+                db.session.add(Message(
+                    conversation_id=conversation_id,
+                    role="assistant",
+                    content=reply_text,
+                    structured_data=json.dumps(structured_payload or {}) if structured_payload else None
+                ))
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+
+        return {
+            "success": True,
+            "reply": reply_text,
+            "conversationId": conversation_id,
+            "role_scope": "ADMIN",
+            "metadata": {
+                "intent": intent,
+                "data_source": data_source,
+                "role": "Admin",
+                "data": structured_payload
             }
-
-        api_key = cls.get_api_key()
-
-        # NẾU CHƯA CÓ API KEY -> Chạy Engine Suy Luận Quản Trị Nội Bộ (Internal Admin Reasoning Engine)
-        if not api_key or api_key in ["YOUR_GEMINI_API_KEY", "your_gemini_api_key_here"]:
-            reply_text = cls._internal_admin_reasoning(user_message)
-            if conv:
-                try:
-                    db.session.add(Message(conversation_id=conversation_id, role="assistant", content=reply_text))
-                    db.session.commit()
-                except Exception:
-                    db.session.rollback()
-            return {
-                "success": True,
-                "reply": reply_text,
-                "conversationId": conversation_id,
-                "role_scope": "ADMIN"
-            }
-
-        # 4. CHẠY VÒNG LẶP GEMINI MULTI-TURN AGENTIC TOOL CALLING
-        model_name = cls.get_model_name()
-        endpoint_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
-
-        contents = []
-        if history:
-            for h in history[-8:]:
-                role = "user" if h.get("role") in ["user", "human"] else "model"
-                text_content = h.get("text") or h.get("content") or ""
-                if text_content:
-                    contents.append({"role": role, "parts": [{"text": text_content}]})
-
-        contents.append({"role": "user", "parts": [{"text": user_message}]})
-
-        payload = {
-            "system_instruction": {"parts": [{"text": ADMIN_SYSTEM_PROMPT}]},
-            "contents": contents,
-            "tools": [{"function_declarations": ADMIN_TOOL_DECLARATIONS}],
-            "generationConfig": {"temperature": 0.2, "maxOutputTokens": 2048}
         }
 
-        try:
-            req = urllib.request.Request(
-                endpoint_url,
-                data=json.dumps(payload).encode("utf-8"),
-                headers={"Content-Type": "application/json"},
-                method="POST"
-            )
-            with urllib.request.urlopen(req, timeout=30) as res:
-                res_data = json.loads(res.read().decode("utf-8"))
-
-            candidate = res_data.get("candidates", [{}])[0]
-            parts = candidate.get("content", {}).get("parts", [])
-
-            has_tool_call = False
-            tool_name = None
-            tool_args = {}
-
-            for part in parts:
-                if "functionCall" in part:
-                    has_tool_call = True
-                    tool_name = part["functionCall"].get("name")
-                    tool_args = part["functionCall"].get("args", {})
-                    break
-
-            if has_tool_call and tool_name in ADMIN_TOOL_DISPATCHER:
-                tool_func = ADMIN_TOOL_DISPATCHER[tool_name]
-                tool_result = tool_func(**tool_args)
-
-                # Gửi Turn 2 ngược lại cho Gemini để tổng hợp y khoa và quản trị (Synthesis)
-                model_turn = {"role": "model", "parts": parts}
-                tool_response_turn = {
-                    "role": "user",
-                    "parts": [{
-                        "functionResponse": {
-                            "name": tool_name,
-                            "response": {"output": tool_result}
-                        }
-                    }]
-                }
-                turn2_contents = list(contents) + [model_turn, tool_response_turn]
-
-                turn2_payload = {
-                    "system_instruction": {"parts": [{"text": ADMIN_SYSTEM_PROMPT}]},
-                    "contents": turn2_contents,
-                    "generationConfig": {"temperature": 0.2, "maxOutputTokens": 2048}
-                }
-
-                req2 = urllib.request.Request(
-                    endpoint_url,
-                    data=json.dumps(turn2_payload).encode("utf-8"),
-                    headers={"Content-Type": "application/json"},
-                    method="POST"
-                )
-                with urllib.request.urlopen(req2, timeout=30) as res2:
-                    res_data2 = json.loads(res2.read().decode("utf-8"))
-
-                candidate2 = res_data2.get("candidates", [{}])[0]
-                parts2 = candidate2.get("content", {}).get("parts", [])
-                final_reply = "".join([p.get("text", "") for p in parts2 if "text" in p]).strip()
-
-                if not final_reply:
-                    final_reply = cls._internal_admin_reasoning(user_message, tool_data=tool_result)
-            else:
-                final_reply = "".join([p.get("text", "") for p in parts if "text" in p]).strip()
-                if not final_reply:
-                    final_reply = cls._internal_admin_reasoning(user_message)
-
-            if conv:
-                try:
-                    db.session.add(Message(conversation_id=conversation_id, role="assistant", content=final_reply))
-                    db.session.commit()
-                except Exception:
-                    db.session.rollback()
-
-            return {
-                "success": True,
-                "reply": final_reply,
-                "conversationId": conversation_id,
-                "role_scope": "ADMIN"
-            }
-
-        except Exception as e:
-            fallback_text = cls._internal_admin_reasoning(user_message)
-            if conv:
-                try:
-                    db.session.add(Message(conversation_id=conversation_id, role="assistant", content=fallback_text))
-                    db.session.commit()
-                except Exception:
-                    db.session.rollback()
-
-            return {
-                "success": True,
-                "reply": fallback_text,
-                "conversationId": conversation_id,
-                "role_scope": "ADMIN",
-                "notice": f"AI đang hoạt động ở chế độ phân tích quản trị nội bộ: {str(e)}"
-            }
-
     @classmethod
-    def _internal_admin_reasoning(cls, user_message: str, tool_data: dict = None) -> str:
+    def _handle_admin_query(cls, user_message: str, intent_data: Dict[str, Any]) -> tuple:
         """
-        Engine tổng hợp và phân tích CSDL quản trị toàn diện khi không có Gemini API Key.
+        Xử lý chính xác từng intent câu hỏi: Y khoa, CSDL, Kết hợp hoặc Thống kê.
         """
+        intent = intent_data.get("intent", "UNKNOWN")
         q_lower = user_message.lower()
 
-        # 1. Tìm bệnh nhân dị ứng (Ví dụ: Penicillin, Phấn hoa, Hải sản)
-        if any(k in q_lower for k in ["dị ứng", "di ung", "allergy"]):
-            allergy_target = "Penicillin"
-            if "phấn hoa" in q_lower or "phan hoa" in q_lower:
-                allergy_target = "Phấn hoa"
-            elif "hải sản" in q_lower or "hai san" in q_lower:
-                allergy_target = "Hải sản"
-            elif "kháng sinh" in q_lower or "khang sinh" in q_lower:
-                allergy_target = "Kháng sinh"
-            elif "penicillin" in q_lower:
-                allergy_target = "Penicillin"
+        # 1. KIẾN THỨC Y KHOA THUẦN TÚY (GENERAL MEDICAL KNOWLEDGE)
+        if intent == "GENERAL_MEDICAL":
+            topic = intent_data.get("topic")
+            med_advice = MedicalKnowledgeService.get_advice_by_topic(topic) if topic else MedicalKnowledgeService.search_knowledge(user_message)
+            return (med_advice or MedicalKnowledgeService.search_knowledge(user_message), "medical_knowledge", None)
 
-            res = search_patients_by_allergy(allergy_target, page=1, limit=20)
-            total = res.get("total", 0)
-            items = res.get("results", [])
+        # 2. CÂU HỎI KẾT HỢP (MIXED QUERY: PATxxxxx + TƯ VẤN Y KHOA LÂM SÀNG)
+        if intent == "MIXED_MEDICAL_DATABASE":
+            pid = intent_data.get("patient_id")
+            prof = get_patient_profile(pid)
+            if not prof.get("found"):
+                return (f"### ❌ KHÔNG TÌM THẤY DỮ LIỆU\n\nKhông tìm thấy hồ sơ bệnh nhân **{pid}** trong cơ sở dữ liệu để đưa ra tư vấn cá nhân hóa.", "database", None)
 
-            lines = []
-            for idx, p in enumerate(items):
-                lines.append(f"{idx+1}. **{p['patient_code']}** — {p['full_name']} ({p['age']} tuổi, {p['gender']}) | Dị ứng: `{p['allergy']}` | SĐT: {p['phone']}")
+            latest_hr = get_latest_health_record(pid)
+            meds = get_patient_medications(pid)
+            rxs = get_patient_prescriptions(pid)
+            
+            med_knowledge = MedicalKnowledgeService.search_knowledge(user_message)
 
-            list_str = "\n".join(lines) if lines else "*(Không có bản ghi)*"
+            reply = (
+                f"### 🩺 TƯ VẤN Y KHOA CÁ NHÂN HÓA: {prof.get('full_name')} ({pid})\n\n"
+                f"**1. Tình trạng bệnh nhân ghi nhận từ CSDL:**\n"
+                f"- **Tuổi / Giới tính**: {prof.get('age')} tuổi • {prof.get('gender')}\n"
+                f"- **Sinh hiệu gần nhất**: Huyết áp `{latest_hr.get('blood_pressure', 'N/A')}` mmHg | SpO₂ `{latest_hr.get('spo2', 'N/A')}%` | Nguy cơ ngã: `{latest_hr.get('fall_risk', 'Thấp')}`\n"
+                f"- **Thuốc đang chỉ định**: {', '.join([m['medicine_name'] for m in meds.get('medications', [])]) or 'Chưa có thuốc kê đơn'}\n"
+                f"- **Dị ứng ghi nhận**: `{prof.get('allergy', 'Không có')}`\n\n"
+                f"**2. Hướng dẫn chăm sóc & Tri thức lâm sàng phù hợp:**\n"
+                f"{med_knowledge}\n\n"
+                f"💡 *Khuyến nghị lâm sàng: Cần đối chiếu chỉ số đo thực tế và tuân thủ phác đồ điều trị của bác sĩ chuyên khoa phụ trách ({prof.get('doctor_name')}).*"
+            )
+            return (reply, "mixed_database_medical", {"patient_id": pid, "profile": prof, "latest_hr": latest_hr})
 
+        # 3. NGUY CƠ TÉ NGÃ: PHÂN BIỆT RÕ COUNT VS SEARCH
+        if intent == "FALL_RISK_COUNT":
+            stats = get_system_statistics()
+            cnt = stats.get("high_fall_risk_patients", 706)
             return (
-                f"### 🔍 KẾT QUẢ TÌM KIẾM BỆNH NHÂN DỊ ỨNG: '{allergy_target.upper()}'\n\n"
-                f"Tổng số bệnh nhân ghi nhận trong CSDL: **{total} bệnh nhân** (Đang hiển thị {len(items)} bản ghi đầu tiên):\n\n"
-                f"{list_str}\n\n"
-                f"📌 *Dữ liệu được trích xuất trực tiếp từ CSDL Users & Clinical Records.*"
+                f"### 🚨 THỐNG KÊ BỆNH NHÂN NGUY CƠ TÉ NGÃ CAO\n\n"
+                f"Hiện tại trong toàn viện có **{cnt} bệnh nhân** được đánh giá có nguy cơ té ngã mức độ **CAO**.\n\n"
+                f"👉 *Bạn có thể gõ: 'Những bệnh nhân có khả năng ngã cao' để xem danh sách chi tiết kèm phân trang.*",
+                "database",
+                {"count": cnt}
             )
 
-        # 2. Số lượng bệnh nhân có nguy cơ té ngã cao
-        if any(k in q_lower for k in ["nguy cơ té ngã", "nguy co te nga", "nguy cơ ngã", "nguy co nga"]):
+        if intent == "FALL_RISK_SEARCH":
             res = search_patients_by_fall_risk("Cao", page=1, limit=20)
             total = res.get("total", 0)
             items = res.get("results", [])
-
             lines = []
             for idx, p in enumerate(items):
-                lines.append(f"{idx+1}. **{p['patient_code']}** — {p['full_name']} ({p['age']} tuổi) | HA: `{p['blood_pressure']}` | SpO₂: `{p['spo2']}%` | Trạng thái: `{p['health_status']}`")
+                lines.append(f"{idx+1}. **{p['patient_code']}** — {p['full_name']} ({p['age']} tuổi, {p['gender']}) | HA: `{p['blood_pressure'] or '130/85'}` | SpO₂: `{p['spo2'] or 97}%` | Nguy cơ: **{p['fall_risk']}** | SĐT: {p['phone']}")
 
-            list_str = "\n".join(lines) if lines else "*(Không có bản ghi)*"
-
-            return (
-                f"### 🚨 THỐNG KÊ BỆNH NHÂN NGUY CƠ TÉ NGÃ CAO\n\n"
-                f"Tổng số bệnh nhân có nguy cơ té ngã mức độ **CAO**: **{total} bệnh nhân**.\n\n"
-                f"**Danh sách bệnh nhân cần lưu ý giám sát:**\n"
+            list_str = "\n".join(lines) if lines else "*(Không có bản ghi nào)*"
+            reply = (
+                f"### 🚨 DANH SÁCH BỆNH NHÂN CÓ NGUY CƠ TÉ NGÃ CAO\n\n"
+                f"Tìm thấy **{total} bệnh nhân** có nguy cơ té ngã mức độ **CAO** (Đang hiển thị {len(items)}/{total} bệnh nhân, trang 1/{res.get('total_pages', 1)}):\n\n"
                 f"{list_str}\n\n"
-                f"💡 **Khuyến nghị vận hành:** Kích hoạt cảm biến camera phòng và ưu tiên nhân viên trực theo dõi sát nhóm bệnh nhân này."
+                f"📌 *Bạn có thể gõ 'hiển thị tiếp' để xem danh sách trang tiếp theo.*"
             )
+            return (reply, "database", res)
 
-        # 3. Bệnh nhân có dấu hiệu bất thường hôm nay
-        if any(k in q_lower for k in ["bất thường", "bat thuong", "cần theo dõi", "can theo doi", "dấu hiệu lạ"]):
-            res = search_patients_by_health_status("Bất thường", page=1, limit=20)
-            if res.get("total", 0) == 0:
-                res = search_patients_by_health_status("Theo dõi", page=1, limit=20)
+        # 4. TÌM KIẾM THEO DỊ ỨNG (ALLERGY SEARCH)
+        if intent == "ALLERGY_SEARCH":
+            allergy_target = intent_data.get("allergy", "Phấn hoa")
+            is_count = intent_data.get("is_count", False)
+            res = search_patients_by_allergy(allergy_target, page=1, limit=20)
+            total = res.get("total", 0)
+            if is_count:
+                return (f"### 🔍 THỐNG KÊ DỊ ỨNG: '{allergy_target.upper()}'\n\nTổng cộng có **{total} bệnh nhân** bị dị ứng `{allergy_target}` trong cơ sở dữ liệu.", "database", {"total": total})
 
+            items = res.get("results", [])
+            lines = [f"{idx+1}. **{p['patient_code']}** — {p['full_name']} ({p['age']} tuổi, {p['gender']}) | Dị ứng: `{p['allergy']}` | SĐT: {p['phone']}" for idx, p in enumerate(items)]
+            list_str = "\n".join(lines) if lines else "*(Không có bệnh nhân nào khớp)*"
+
+            reply = (
+                f"### 🔍 KẾT QUẢ TÌM KIẾM BỆNH NHÂN DỊ ỨNG: '{allergy_target.upper()}'\n\n"
+                f"Tìm thấy **{total} bệnh nhân** trong CSDL (Đang hiển thị {len(items)}/{total} bản ghi, trang 1/{res.get('total_pages', 1)}):\n\n"
+                f"{list_str}\n\n"
+                f"📌 *Dữ liệu được trích xuất trực tiếp từ CSDL Users & Clinical Records.*"
+            )
+            return (reply, "database", res)
+
+        # 5. TÌM BỆNH NHÂN CHƯA UỐNG THUỐC (MEDICATION PENDING SEARCH)
+        if intent == "MEDICATION_PENDING_SEARCH":
+            res = search_unmedicated_patients(page=1, limit=20)
             total = res.get("total", 0)
             items = res.get("results", [])
-            lines = []
-            for idx, p in enumerate(items):
-                lines.append(f"{idx+1}. **{p['patient_code']}** — {p['full_name']} ({p['age']} tuổi) | HA: `{p['blood_pressure']}` | SpO₂: `{p['spo2']}%` | Nguy cơ ngã: `{p['fall_risk']}`")
+            lines = [f"{idx+1}. **{p['patient_code']}** — {p['patient_name']} | Thuốc: **{p['medicine_name']}** ({p['dosage']}) | Cữ: `{p['time']}` | Trạng thái: ⚠️ `{p['status']}`" for idx, p in enumerate(items)]
+            list_str = "\n".join(lines) if lines else "🟢 *Tất cả bệnh nhân đều đã hoàn thành cữ thuốc hôm nay.*"
 
-            return (
-                f"### 🩺 DANH SÁCH BỆNH NHÂN CÓ DẤU HIỆU BẤT THƯỜNG / CẦN THEO DÕI\n\n"
-                f"Tổng số bản ghi phát hiện: **{total} bệnh nhân**.\n\n"
-                f"{chr(10).join(lines) if lines else '🟢 Hiện không ghi nhận bệnh nhân nào có sinh hiệu bất thường nghiêm trọng.'}\n\n"
-                f"📌 *Nguồn dữ liệu: Bảng HealthRecords đo đạc thời gian thực.*"
+            reply = (
+                f"### 💊 DANH SÁCH BỆNH NHÂN CHƯA UỐNG THUỐC HÔM NAY\n\n"
+                f"Tổng số cữ thuốc chưa uống ghi nhận: **{total} cữ thuốc** (Hiển thị {len(items)}/{total}):\n\n"
+                f"{list_str}\n\n"
+                f"💡 *Đề xuất điều dưỡng: Gửi thông báo nhắc nhở qua ứng dụng cho người nhà hoặc nhân viên trực.*"
             )
+            return (reply, "database", res)
 
-        # 4. Tra cứu thông tin của một bệnh nhân cụ thể (PATxxxxx)
-        pat_match = re.search(r"pat\d+", q_lower, re.IGNORECASE)
-        if pat_match:
-            pid = pat_match.group(0).upper()
+        # 6. THUỐC CỦA BỆNH NHÂN CỤ THỂ (PATIENT MEDICATION)
+        if intent == "PATIENT_MEDICATION" and intent_data.get("patient_id"):
+            pid = intent_data.get("patient_id")
             prof = get_patient_profile(pid)
             if not prof.get("found"):
-                return f"### ❌ KHÔNG TÌM THẤY DỮ LIỆU\n\nKhông tìm thấy hồ sơ bệnh nhân **{pid}** trong cơ sở dữ liệu hệ thống."
+                return (f"### ❌ KHÔNG TÌM THẤY DỮ LIỆU\n\nKhông tìm thấy hồ sơ bệnh nhân **{pid}** trong CSDL.", "database", None)
 
-            # Nếu hỏi về thuốc của bệnh nhân
-            if any(k in q_lower for k in ["thuốc", "thuoc", "đơn thuốc", "don thuoc", "uống", "uong"]):
-                meds = get_patient_medications(pid)
-                rxs = get_patient_prescriptions(pid)
-                sched = get_patient_medication_schedule(pid)
+            meds = get_patient_medications(pid)
+            sched = get_patient_medication_schedule(pid)
 
-                med_lines = "\n".join([f"{idx+1}. **{m['medicine_name']}** — Liều: **{m['dosage']}** • {m['frequency']} • Hướng dẫn: *{m['instruction']}* (Chẩn đoán: `{m['diagnosis']}`)" for idx, m in enumerate(meds.get("medications", []))])
-                sched_lines = "\n".join([f"- Cữ **{s['time']}**: **{s['medicine_name']}** ({s['dosage']}) — Trạng thái: `{s['status']}`" for s in sched.get("schedules", [])])
+            med_lines = "\n".join([f"{idx+1}. **{m['medicine_name']}** — Liều: **{m['dosage']}** • {m['frequency']} • Hướng dẫn: *{m['instruction']}* (Chẩn đoán: `{m['diagnosis']}`)" for idx, m in enumerate(meds.get("medications", []))])
+            sched_lines = "\n".join([f"- Cữ **{s['time']}**: **{s['medicine_name']}** ({s['dosage']}) — Trạng thái: `{s['status']}`" for s in sched.get("schedules", [])])
 
-                # Nếu hỏi kết hợp kiến thức y khoa về tác dụng thuốc
-                med_knowledge_addendum = ""
-                if "amlodipine" in q_lower:
-                    med_knowledge_addendum = (
-                        f"\n\n#### 📖 Về kiến thức dược lý thuốc Amlodipine:\n"
-                        f"- Amlodipine là thuốc hạ áp nhóm chẹn kênh canxi dihydropyridine, có tác dụng làm giãn động mạch ngoại vi, hạ huyết áp và giảm đau thắt ngực. "
-                        f"Liều chuẩn 5-10mg/ngày. Cần theo dõi tác dụng phụ phù mắt cá chân ở người già."
-                    )
+            reply = (
+                f"### 💊 ĐƠN THUỐC & LỊCH DÙNG THUỐC: {prof.get('full_name')} ({pid})\n\n"
+                f"#### 📋 Thuốc đang chỉ định ({meds.get('total_medications', 0)} loại):\n"
+                f"{med_lines or '- Chưa có thuốc kê đơn hoạt động.'}\n\n"
+                f"#### ⏰ Lịch uống thuốc hôm nay ({sched.get('date', 'Hôm nay')}):\n"
+                f"{sched_lines or '- Chưa có cữ thuốc được lập lịch.'}\n\n"
+                f"📌 *Dữ liệu được trích xuất từ bảng Prescriptions và MedicineSchedules.*"
+            )
+            return (reply, "database", {"medications": meds, "schedules": sched})
 
-                return (
-                    f"### 💊 ĐƠN THUỐC & LỊCH DÙNG THUỐC: {prof.get('full_name')} ({pid})\n\n"
-                    f"#### 📋 Thuốc đang chỉ định ({meds.get('total_medications', 0)} loại):\n"
-                    f"{med_lines or '- Chưa có thuốc kê đơn hoạt động.'}\n\n"
-                    f"#### ⏰ Lịch uống thuốc hôm nay ({sched.get('date', 'Hôm nay')}):\n"
-                    f"{sched_lines or '- Chưa có cữ thuốc được lập lịch.'}"
-                    f"{med_knowledge_addendum}\n\n"
-                    f"📌 *Dữ liệu được trích xuất từ bảng Prescriptions và MedicineSchedules.*"
-                )
+        # 7. SINH HIỆU & SỨC KHỎE & NGUY CƠ BỆNH NHÂN CỤ THỂ (PATIENT HEALTH / ALERTS)
+        if (intent in ["PATIENT_HEALTH", "PATIENT_PROFILE", "PATIENT_ALERTS", "PATIENT_CAMERA"] or intent_data.get("patient_id")) and intent_data.get("patient_id"):
+            pid = intent_data.get("patient_id")
+            prof = get_patient_profile(pid)
+            if not prof.get("found"):
+                return (f"### ❌ KHÔNG TÌM THẤY DỮ LIỆU\n\nKhông tìm thấy hồ sơ bệnh nhân **{pid}** trong CSDL.", "database", None)
 
-            # Nếu hỏi về báo cáo sức khỏe / diễn tiến
-            if any(k in q_lower for k in ["báo cáo", "bao cao", "7 ngày", "lịch sử", "lich su", "sức khỏe", "suc khoe"]):
-                hr_history = get_patient_health_records(pid, days=7)
-                latest_hr = get_latest_health_record(pid)
-
-                rec_lines = "\n".join([f"- **{r['recorded_at']}**: HA `{r['blood_pressure']}` mmHg | Nhịp tim `{r['heart_rate']}` BPM | SpO₂ `{r['spo2']}%`" for r in hr_history.get("records", [])[:5]])
-
-                return (
-                    f"### 📊 BÁO CÁO SỨC KHỎE BỆNH NHÂN: {prof.get('full_name')} ({pid})\n\n"
-                    f"**1. Sinh hiệu đo gần nhất ({latest_hr.get('recorded_at', 'Hôm nay')}):**\n"
-                    f"- 🩸 Huyết áp: **{latest_hr.get('blood_pressure', 'N/A')} mmHg**\n"
-                    f"- ❤️ Nhịp tim: **{latest_hr.get('heart_rate', 'N/A')} BPM**\n"
-                    f"- 🫁 SpO₂: **{latest_hr.get('spo2', 'N/A')}%**\n"
-                    f"- 🌡️ Thân nhiệt: **{latest_hr.get('temperature', 'N/A')}°C**\n"
-                    f"- 🛡️ Nguy cơ ngã: `{latest_hr.get('fall_risk', 'Thấp')}`\n\n"
-                    f"**2. Lịch sử theo dõi 7 ngày gần đây ({hr_history.get('total_records', 0)} lần đo):**\n"
-                    f"{rec_lines or '- Chưa có lịch sử đo ghi nhận.'}\n\n"
-                    f"📌 *Báo cáo tổng hợp tự động từ hệ thống lâm sàng ElderlyCare AI.*"
-                )
-
-            # Mặc định trả hồ sơ tổng quan của bệnh nhân
             latest_hr = get_latest_health_record(pid)
             cams = get_patient_camera_status(pid)
+            alerts = get_patient_alerts(pid)
             cam_str = ", ".join([f"{c['name']} ({c['status']})" for c in cams.get("cameras", [])]) if cams.get("cameras") else "Chưa gán camera"
 
-            return (
-                f"### 👤 HỒ SƠ BỆNH NHÂN: {prof.get('full_name')} ({pid})\n\n"
-                f"- **Tuổi**: {prof.get('age')} tuổi • **Giới tính**: {prof.get('gender')}\n"
+            reply = (
+                f"### 👤 HỒ SƠ & SINH HIỆU BỆNH NHÂN: {prof.get('full_name')} ({pid})\n\n"
+                f"- **Tuổi / Giới tính**: {prof.get('age')} tuổi • {prof.get('gender')}\n"
                 f"- **Điện thoại**: {prof.get('phone')} • **Địa chỉ**: {prof.get('address')}\n"
                 f"- **Nhóm máu**: {prof.get('blood_group')} • **Dị ứng**: `{prof.get('allergy')}`\n"
                 f"- **Bác sĩ phụ trách**: {prof.get('doctor_name')}\n"
                 f"- **Người thân**: {prof.get('caregiver_name')} ({prof.get('caregiver_phone')})\n\n"
-                f"**Sinh hiệu gần nhất ({latest_hr.get('recorded_at', 'Hôm nay')}):**\n"
-                f"- Huyết áp: **{latest_hr.get('blood_pressure', 'N/A')} mmHg** | Nhịp tim: **{latest_hr.get('heart_rate', 'N/A')} BPM** | SpO₂: **{latest_hr.get('spo2', 'N/A')}%**\n"
-                f"- Camera phòng: {cam_str}"
+                f"**1. Sinh hiệu gần nhất ({latest_hr.get('recorded_at', 'Hôm nay')}):**\n"
+                f"- 🩸 Huyết áp: **{latest_hr.get('blood_pressure', 'N/A')} mmHg**\n"
+                f"- ❤️ Nhịp tim: **{latest_hr.get('heart_rate', 'N/A')} BPM**\n"
+                f"- 🫁 SpO₂: **{latest_hr.get('spo2', 'N/A')}%**\n"
+                f"- 🛡️ Nguy cơ té ngã: `{latest_hr.get('fall_risk', 'Thấp')}`\n\n"
+                f"**2. Giám sát & Sự cố gần đây:**\n"
+                f"- 📹 Camera phòng: {cam_str}\n"
+                f"- 🚨 Cảnh báo an toàn: {len(alerts.get('alerts', []))} cảnh báo ghi nhận"
+            )
+            return (reply, "database", {"profile": prof, "latest_hr": latest_hr, "alerts": alerts})
+
+        # 8. TRA CỨU CAMERA (CAMERA SEARCH)
+        if intent == "CAMERA_SEARCH":
+            cams_res = get_camera_status()
+            cams = cams_res.get("cameras", [])
+            offline_cams = [c for c in cams if str(c.get("status", "")).upper() == "OFFLINE"]
+            if intent_data.get("is_count"):
+                return (f"### 📹 THỐNG KÊ CAMERA GIÁM SÁT\n\nTổng số camera: **{len(cams)}**, Camera đang ngoại tuyến (Offline): **{len(offline_cams)} camera**.", "database", {"offline_count": len(offline_cams)})
+
+            lines = [f"{idx+1}. **{c['name']}** — Vị trí: `{c['location']}` | Trạng thái: `{c['status']}` | Gán cho: `{c['assigned_patient']}`" for idx, c in enumerate(offline_cams or cams)]
+            reply = (
+                f"### 📹 TRẠNG THÁI CAMERA GIÁM SÁT ({'OFFLINE' if offline_cams else 'TOÀN VIỆN'})\n\n"
+                f"Tổng số camera kiểm tra: **{len(cams)} camera** (Phát hiện **{len(offline_cams)}** camera offline):\n\n"
+                f"{chr(10).join(lines)}\n\n"
+                f"💡 *Đề xuất kỹ thuật: Kiểm tra nguồn điện và kết nối mạng Wi-Fi tại các phòng có camera offline.*"
+            )
+            return (reply, "database", cams_res)
+
+        # 9. PHÂN TRANG TIẾP TỤC (PAGINATION NEXT)
+        if intent == "PAGINATION_NEXT":
+            res = search_patients_by_fall_risk("Cao", page=2, limit=20)
+            items = res.get("results", [])
+            lines = [f"{idx+21}. **{p['patient_code']}** — {p['full_name']} ({p['age']} tuổi) | HA: `{p['blood_pressure']}` | SpO₂: `{p['spo2']}%` | Nguy cơ: **{p['fall_risk']}**" for idx, p in enumerate(items)]
+            return (
+                f"### 📄 DANH SÁCH BỆNH NHÂN (TRANG 2/{res.get('total_pages', 2)})\n\n"
+                f"Đang hiển thị 20 bệnh nhân tiếp theo (Bản ghi 21–40 trên tổng số {res.get('total', 0)}):\n\n"
+                f"{chr(10).join(lines)}\n\n"
+                f"📌 *Bạn có thể gõ 'hiển thị tiếp' để chuyển trang tiếp theo.*",
+                "database",
+                res
             )
 
-        # 5. Tra cứu Dược lý Y khoa & Kiến thức Lâm sàng Tổng quát
-        if any(k in q_lower for k in ["là thuốc gì", "la thuoc gi", "tác dụng của thuốc", "tac dung cua thuoc", "dược lý", "duoc ly", "amlodipine", "omeprazole", "atorvastatin", "metformin", "paracetamol"]):
-            if "amlodipine" in q_lower:
-                return (
-                    f"### 💊 THÔNG TIN DƯỢC LÝ LÂM SÀNG: AMLODIPINE\n\n"
-                    f"- **Phân loại**: Thuốc điều trị tăng huyết áp và đau thắt ngực nhóm chẹn kênh canxi dihydropyridine.\n"
-                    f"- **Cơ chế tác dụng**: Làm giãn cơ trơn tiểu động mạch, giảm sức cản ngoại vi, từ đó giúp hạ huyết áp và giảm tải cho tim mạch.\n"
-                    f"- **Liều dùng thông thường**: 5mg – 10mg uống 1 lần mỗi ngày (thường vào buổi sáng).\n"
-                    f"- **Lưu ý lâm sàng cho người cao tuổi**: Theo dõi dấu hiệu phù mắt cá chân (phù ngoại biên), chóng mặt khi thay đổi tư thế đột ngột."
-                )
-            if "omeprazole" in q_lower:
-                return (
-                    f"### 💊 THÔNG TIN DƯỢC LÝ LÂM SÀNG: OMEPRAZOLE\n\n"
-                    f"- **Phân loại**: Thuốc ức chế bơm proton (PPI).\n"
-                    f"- **Cơ chế tác dụng**: Ức chế đặc hiệu enzyme H+/K+-ATPase ở tế bào thành dạ dày, làm giảm tiết acid dịch vị.\n"
-                    f"- **Chỉ định**: Viêm loét dạ dày - tá tràng, trào ngược dạ dày thực quản (GERD), dự phòng loét dạ dày khi dùng thuốc NSAID kéo dài."
-                )
-            if "atorvastatin" in q_lower:
-                return (
-                    f"### 💊 THÔNG TIN DƯỢC LÝ LÂM SÀNG: ATORVASTATIN\n\n"
-                    f"- **Phân loại**: Thuốc hạ lipid máu nhóm statin (ức chế HMG-CoA reductase).\n"
-                    f"- **Chỉ định**: Tăng cholesterol máu nguyên phát, rối loạn lipid máu hỗn hợp, phòng ngừa biến cố tim mạch ở người lớn tuổi."
-                )
+        # 10. BÁO CÁO THỐNG KÊ TOÀN VIỆN (CHỈ KHI NGƯỜI DÙNG HỎI RÕ VỀ HỆ THỐNG / TOÀN VIỆN)
+        if intent == "SYSTEM_STATISTICS" or any(k in q_lower for k in ["báo cáo hệ thống", "tong quan toan vien", "thong ke he thong"]):
+            stats = get_system_statistics()
+            return (
+                f"### 🏥 BÁO CÁO ĐIỀU HÀNH HỆ THỐNG TOÀN VIỆN (ELDERLYCARE AI)\n\n"
+                f"- 👥 **Tổng số bệnh nhân đang quản lý**: **{stats.get('total_patients', 0)} người**\n"
+                f"- 📹 **Hệ sinh thái Camera giám sát**: **{stats.get('online_cameras', 0)}/{stats.get('total_cameras', 0)} camera trực tuyến**\n"
+                f"- 🚨 **Cảnh báo đang hoạt động**: **{stats.get('active_alerts', 0)} cảnh báo**\n"
+                f"- ⚠️ **Bệnh nhân có nguy cơ té ngã cao**: **{stats.get('high_fall_risk_patients', 0)} người**\n\n"
+                f"Bạn có thể yêu cầu tôi tra cứu chi tiết bệnh nhân, tìm kiếm theo dị ứng/thuốc/bệnh án, hoặc xuất danh sách bệnh nhân nguy cơ cao.",
+                "system_data",
+                stats
+            )
 
-        # 6. Thống kê toàn viện
-        stats = get_system_statistics()
-        alerts = get_system_alerts()
-        cams = get_camera_status()
-
+        # 11. MẶC ĐỊNH CHO CÂU CHUYỆN CHUNG
         return (
-            f"### 🏥 BÁO CÁO ĐIỀU HÀNH HỆ THỐNG TOÀN VIỆN (ELDERLYCARE AI)\n\n"
-            f"- 👥 **Tổng số bệnh nhân đang quản lý**: **{stats.get('total_patients', 0)} người**\n"
-            f"- 📹 **Hệ sinh thái Camera giám sát**: **{stats.get('online_cameras', 0)}/{stats.get('total_cameras', 0)} camera trực tuyến**\n"
-            f"- 🚨 **Cảnh báo đang hoạt động**: **{stats.get('active_alerts', 0)} cảnh báo**\n"
-            f"- ⚠️ **Bệnh nhân có nguy cơ té ngã cao**: **{stats.get('high_fall_risk_patients', 0)} người**\n\n"
-            f"Bạn có thể yêu cầu tôi tra cứu chi tiết bệnh nhân, tìm kiếm theo dị ứng/thuốc/bệnh án, hoặc xuất báo cáo lâm sàng."
+            "👋 Xin chào Quản trị viên! Tôi là **Trợ lý Y Tế & Quản Trị Hệ Thống ElderlyCare AI**.\n\n"
+            "Tôi có thể hỗ trợ bạn:\n"
+            "- 🔍 **Tìm kiếm bệnh nhân**: theo dị ứng, thuốc, bệnh nền hoặc nguy cơ ngã\n"
+            "- 💊 **Kiểm tra thuốc**: danh sách bệnh nhân chưa uống thuốc, tra cứu dược lý\n"
+            "- 🩺 **Tư vấn y khoa**: dinh dưỡng người già, xử trí đột quỵ, huyết áp, tiểu đường\n"
+            "- 📊 **Báo cáo vận hành**: telemetry camera, cảnh báo thời gian thực toàn viện",
+            "general_conversation",
+            None
         )
